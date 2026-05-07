@@ -210,3 +210,6 @@ __marimo__/
 
 # Mkdocs
 site/
+
+# Agents
+agent-reports/

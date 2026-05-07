@@ -11,7 +11,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import warnings
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, TypedDict
@@ -19,17 +18,11 @@ from typing import Any, TypedDict
 # Third-party
 import cloudpickle
 import equinox as eqx
-import jax
-import jax.numpy as jnp
 import jax.tree_util as jtu
 from jaxtyping import PyTree
 
 # Local
-from ._io import (
-    load_dataset,
-    load_jnparray,
-    load_model,
-)
+from ._io import load_dataset
 
 #                                                          Authorship & Credits
 # =============================================================================
@@ -77,8 +70,8 @@ class Task(eqx.Module):
         Whether to pass a random key to the loss function.
     has_aux : bool
         Whether the loss function returns auxiliary outputs.
-    dataset : DatasetDict
-        Dataset information.
+    dataset : DatasetDict or None
+        Dataset information, or ``None`` if the task has no dataset.
     tag : dict[str, Any]
         Metadata tags for the task.
     """
@@ -88,7 +81,7 @@ class Task(eqx.Module):
     global_min: float = eqx.field(static=True, default=None)
     pass_rng: bool = eqx.field(static=True, default=False)
     has_aux: bool = eqx.field(static=True, default=False)
-    dataset: DatasetDict = eqx.field(default_factory=dict, static=True)
+    dataset: DatasetDict | None = eqx.field(default=None, static=True)
     tag: dict[str, Any] = eqx.field(default_factory=dict, static=True)
 
     @property
@@ -101,8 +94,8 @@ class Task(eqx.Module):
         dict[str, Any]
             Loaded dataset or empty dict if no path is specified.
         """
-        if self.dataset.get("dataset_path") is None:
-            return dict()
+        if self.dataset is None or self.dataset.get("dataset_path") is None:
+            return {}
         return load_dataset(self.dataset["dataset_path"])
 
     @property
@@ -115,6 +108,8 @@ class Task(eqx.Module):
         int or None
             Batch size if specified, else None.
         """
+        if self.dataset is None:
+            return None
         return self.dataset.get("batch_size", None)
 
     @property
@@ -219,15 +214,7 @@ class Task(eqx.Module):
         PyTree
             Skeleton with the same structure as the original model.
         """
-        if "model_shape_hex" in hyperparams:
-            return cloudpickle.loads(
-                bytes.fromhex(hyperparams["model_shape_hex"])
-            )
-        # Legacy fallback: old files stored shape/dtype as plain JSON
-        return jax.ShapeDtypeStruct(
-            tuple(hyperparams["model_shape"]),
-            jnp.dtype(hyperparams["model_dtype"]),
-        )
+        return cloudpickle.loads(bytes.fromhex(hyperparams["model_shape_hex"]))
 
     @classmethod
     def _from_header(cls, hyperparams: dict, model) -> Task:
@@ -247,111 +234,15 @@ class Task(eqx.Module):
             Fully assembled Task.
         """
         loss_fn = cloudpickle.loads(bytes.fromhex(hyperparams["loss_fn"]))
-        dataset = hyperparams.get("dataset") or {}
         return cls(
             model=model,
             loss_fn=loss_fn,
             global_min=hyperparams.get("global_min"),
             pass_rng=hyperparams["pass_rng"],
             has_aux=hyperparams["has_aux"],
-            dataset=dataset,
+            dataset=hyperparams.get("dataset"),
             tag=hyperparams.get("tag", {}),
         )
-
-    @classmethod
-    def from_dict(
-        cls, data: dict[str, Any], filepath: str | None = None
-    ) -> Task:
-        """
-        Create a Task from a legacy JSON-format dictionary.
-
-        This supports the old multi-file format (produced by the old
-        ``to_dict(path)`` / ``save_to_json`` methods). For new code use
-        :meth:`Task.load` with a ``.eqx`` path.
-
-        Parameters
-        ----------
-        data : dict[str, Any]
-            Dictionary as written by the old ``to_dict(path)`` method,
-            containing a ``model_path`` key with file-path references.
-        filepath : str or None, optional
-            Path used to resolve relative model file paths, by default None.
-
-        Returns
-        -------
-        Task
-            Instantiated Task object.
-        """
-        if "model" in data["model_path"]:
-            try:
-                model = load_model(
-                    model_path=data["model_path"]["model"],
-                    shape_path=data["model_path"]["shape"],
-                )
-            except FileNotFoundError:
-                new_path_model = (
-                    Path(filepath).parent
-                    / Path(data["model_path"]["model"]).name
-                )
-                new_path_shape = (
-                    Path(filepath).parent
-                    / Path(data["model_path"]["shape"]).name
-                )
-                model = load_model(
-                    model_path=new_path_model, shape_path=new_path_shape
-                )
-        else:
-            try:
-                model = load_jnparray(data["model_path"]["array"])
-            except FileNotFoundError:
-                new_path_array = (
-                    Path(filepath).parent
-                    / Path(data["model_path"]["array"]).name
-                )
-                model = load_jnparray(new_path_array)
-
-        # Loss function is loaded with pickle from a hex string
-        loss_fn = cloudpickle.loads(bytes.fromhex(data["loss_fn"]))
-
-        dataset = data.get("dataset", {})
-
-        if dataset is None:
-            dataset = {}
-
-        tag = data.get("tag", {})
-        has_aux = data["has_aux"]
-        pass_rng = data["pass_rng"]
-        global_min = data.get("global_min", None)
-        return cls(
-            model=model,
-            global_min=global_min,
-            pass_rng=pass_rng,
-            loss_fn=loss_fn,
-            dataset=dataset,
-            has_aux=has_aux,
-            tag=tag,
-        )
-
-    def save_to_json(self, filepath: Path):
-        """
-        Save the task to disk.
-
-        .. deprecated::
-            Use :meth:`Task.save` instead. This method now delegates to
-            ``Task.save`` and writes a single ``.eqx`` file rather than
-            a JSON file.
-
-        Parameters
-        ----------
-        filepath : Path
-            Base path (extension is ignored; ``.eqx`` will be used).
-        """
-        warnings.warn(
-            "save_to_json is deprecated; use Task.save() instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        Task.save(self, str(filepath))
 
     @staticmethod
     def save(object: Task, path: str) -> str:
@@ -412,13 +303,13 @@ class Task(eqx.Module):
         """
         loss_fn_hex = cloudpickle.dumps(self.loss_fn).hex()
 
-        # Both eqx.Module and jnp.ndarray are pytrees;
+        # eqx.Module and jax arrays are both pytrees;
         # filter_eval_shape replaces every array leaf with a
         # ShapeDtypeStruct, giving us a serialisable skeleton.
         model_shape = eqx.filter_eval_shape(lambda _: self.model, None)
         model_shape_hex = cloudpickle.dumps(model_shape).hex()
 
-        if self.dataset.get("dataset_path") is None:
+        if self.dataset is None or self.dataset.get("dataset_path") is None:
             dataset = None
         else:
             dataset = dict(self.dataset)
@@ -439,36 +330,18 @@ class Task(eqx.Module):
         """
         Load a Task from disk.
 
-        Supports both the new single-file ``.eqx`` format and the legacy
-        multi-file ``.json`` format for backward compatibility.
-
         Parameters
         ----------
         filepath : str
-            Path to the task file.  For the new format supply either the
-            base path or the ``.eqx`` path; for the legacy format supply
-            the ``.json`` path.
+            Path to the task file.  Supply either the base path or the
+            ``.eqx`` path.
 
         Returns
         -------
         Task
             The loaded task.
         """
-        _path = Path(filepath)
-        if _path.suffix == ".json":
-            # Legacy multi-file format: .json + .eqx/.pkl or .npy
-            warnings.warn(
-                f"Loading legacy .json Task format from {filepath!r}. "
-                "Re-save with Task.save() to migrate to the new single-file "
-                ".eqx format.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            with open(_path) as f:
-                data = json.load(f)
-            return cls.from_dict(data, filepath)
-        # New single-file format
-        eqx_path = _path.with_suffix(".eqx").resolve()
+        eqx_path = Path(filepath).with_suffix(".eqx").resolve()
         with open(eqx_path, "rb") as f:
             hyperparams = json.loads(f.readline().decode())
             # Resolve a relative dataset_path against the .eqx file's

@@ -6,11 +6,15 @@ L2CO Tasks - Optimization tasks compatible with the L2CO library
 # =============================================================================
 
 # Local
-from ._src.benchmark_task import create_bbob_task, create_cec2005_task
+from ._src.benchmark_task import (
+    CEC2019Sampler,
+    create_bbob_task,
+    create_cec2005_task,
+)
 from ._src.continue_from_path import retrieve_tasks
 from ._src.gaussian_meta import create_gaussian_meta_task
 from ._src.mnist1d_task import create_mnist1d_task
-from ._src.pde import create_pde_task
+from ._src.pde import PDETaskSampler, create_pde_task
 from ._src.quadratic_task import create_quadratic_task
 from ._src.spiral_task import create_spiral_task
 from ._src.task import DatasetDict, Task
@@ -25,7 +29,9 @@ __status__ = "Stable"
 # =============================================================================
 
 __all__ = [
+    "CEC2019Sampler",
     "DatasetDict",
+    "PDETaskSampler",
     "Task",
     "create_bbob_task",
     "create_cec2005_task",

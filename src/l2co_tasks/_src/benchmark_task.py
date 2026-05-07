@@ -197,8 +197,8 @@ def create_bbob_task(
     key and applies multiplicative Gaussian noise.
     """
     fn_scale_input = scale_input(
-        domain_bounds=jnp.tile(jnp.array([0.0, 1.0]), (dimensionality, 2)),
-        function_bounds=jnp.tile(jnp.array([-5.0, 5.0]), (dimensionality, 2)),
+        domain_bounds=jnp.tile(jnp.array([0.0, 1.0]), (dimensionality, 1)),
+        function_bounds=jnp.tile(jnp.array([-5.0, 5.0]), (dimensionality, 1)),
     )
 
     if noise > 0.0:
@@ -260,10 +260,10 @@ def create_cec2005_task(
     """
 
     fn_scale_input = scale_input(
-        domain_bounds=jnp.tile(jnp.array([0.0, 1.0]), (dimensionality, 2)),
+        domain_bounds=jnp.tile(jnp.array([0.0, 1.0]), (dimensionality, 1)),
         function_bounds=jnp.tile(
             jnp.array(bbob_jax.bounds.cec2005_bounds[fn_name]),
-            (dimensionality, 2),
+            (dimensionality, 1),
         ),
     )
 

@@ -63,6 +63,16 @@ tests = [
 bugs = "https://github.com/mpvanderschelling/l2co_tasks/issues"
 homepage = "https://github.com/mpvanderschelling/l2co_tasks"
 
+[tool.pytest.ini_options]
+filterwarnings = [
+  "error::DeprecationWarning:l2co_tasks"
+]
+markers = [
+  "slow: test writes a dataset .npz or runs an inner training loop",
+  "requires_f3dasm: test constructs an f3dasm.ExperimentData"
+]
+testpaths = ["tests"]
+
 [tool.ruff]
 line-length = 79
 
