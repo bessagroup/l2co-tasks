@@ -12,6 +12,7 @@ from ._src.benchmark_task import (
     create_cec2005_task,
 )
 from ._src.continue_from_path import retrieve_tasks
+from ._src.experimentdata import create_tasks_experimentdata
 from ._src.gaussian_meta import create_gaussian_meta_task
 from ._src.mnist1d_task import create_mnist1d_task
 from ._src.pde import PDETaskSampler, create_pde_task
@@ -41,5 +42,6 @@ __all__ = [
     "create_pde_task",
     "create_quadratic_task",
     "create_spiral_task",
+    "create_tasks_experimentdata",
     "retrieve_tasks",
 ]
