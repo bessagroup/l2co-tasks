@@ -14,7 +14,7 @@ classifiers = [
   "Programming Language :: Python :: 3"
 ]
 dependencies = [
-  "bbob-jax>=1.6.2",
+  "bbob-jax>=1.6.4",
   "cloudpickle>=3.1.1",
   "equinox>=0.13.0",
   "f3dasm",
@@ -24,7 +24,7 @@ dependencies = [
   "mnist1d",
   "numpy",
   "omegaconf",
-  "optax<=0.2.4",
+  "optax>=0.2.5",
   "pandas"
 ]
 description = "Optimization tasks compatible with the L2CO library"
