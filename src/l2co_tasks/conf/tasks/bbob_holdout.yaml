@@ -1,0 +1,43 @@
+# Held-out BBOB task set for evaluating an agentic config-search loop.
+#
+# Same fn_name / dimensionality as ``bbob_test.yaml`` so the task-feature
+# schema (dimensionality, separable, unimodal) used during training is
+# valid for these tasks too. Disjoint seed range (1..3 vs the training
+# seed 0) so each function is sampled with a different BBOB instance,
+# giving a genuine generalization signal without forcing the
+# FeatureProcessor to handle unseen categorical levels.
+sampler:
+  _target_: f3dasm.create_sampler
+  sampler: "grid"
+sampler_kwargs:
+
+experimentdata:
+  domain:
+    input:
+      fn_name:
+        type: category
+        categories:
+          - 'rastrigin_seperable'
+          - 'rosenbrock'
+          - 'discuss'
+      dimensionality:
+        type: category
+        categories:
+          - 20
+      seed:
+        type: int
+        low: 1
+        high: 3
+
+task_kwargs:
+
+data_generator:
+  _target_: l2co_tasks.create_bbob_task
+  _partial_: True
+
+schema:
+  dimensionality: continuous
+  separable: boolean
+  unimodal: boolean
+
+bounded:

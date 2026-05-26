@@ -110,6 +110,9 @@ select = [
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
 
+[tool.setuptools.package-data]
+"l2co_tasks.conf" = ["**/*.yaml"]
+
 [tool.uv]
 package = true
 

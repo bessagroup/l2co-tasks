@@ -79,6 +79,15 @@ def create_gaussian_meta_task(
     Task
         Configured meta-learning task.
     """
+    # Coerce numpy scalars (e.g. produced by the f3dasm random
+    # sampler over an int-typed domain) back to Python ints so the
+    # tag round-trips through ``json.dumps`` in ``Task.save``.
+    seed = int(seed)
+    num_gaussians = int(num_gaussians)
+    num_samples_per_gaussian = int(num_samples_per_gaussian)
+    dim_points = int(dim_points)
+    inner_steps = int(inner_steps)
+
     tag = {}
     tag["task_name"] = "gaussian_classification_meta"
     tag["num_gaussians"] = num_gaussians

@@ -91,7 +91,16 @@ def create_spiral_task(
     Task
         Configured spiral classification task.
     """
-    key = jrd.key(int(seed))
+    # Coerce numpy scalars (e.g. produced by the f3dasm random
+    # sampler over an int-typed domain) back to Python ints so the
+    # tag and dataset header round-trip through ``json.dumps`` in
+    # ``Task.save``.
+    seed = int(seed)
+    hidden_size = int(hidden_size)
+    dataset_size = int(dataset_size)
+    batch_size = int(batch_size)
+
+    key = jrd.key(seed)
 
     model_key, dataset_key, batch_key = jrd.split(key, 3)
 

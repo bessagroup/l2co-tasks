@@ -71,6 +71,15 @@ def create_mnist1d_task(
     Task
         Configured MNIST-1D classification task.
     """
+    # Coerce numpy scalars (e.g. produced by the f3dasm random
+    # sampler over an int-typed domain) back to Python ints so the
+    # tag round-trips through ``json.dumps`` in ``Task.save`` and so
+    # ``mnist1d.utils.set_seed`` accepts the value (stdlib
+    # ``random.seed`` rejects numpy integer scalars).
+    seed = int(seed)
+    dataset_size = int(dataset_size)
+    batch_size = int(batch_size)
+
     tag = {"task_name": "mnist1d"}
     tag["seed"] = seed
 

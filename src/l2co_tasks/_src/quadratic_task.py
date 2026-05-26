@@ -87,10 +87,16 @@ def create_quadratic_task(dimensionality: int, seed: int) -> Task:
     Task
         Configured quadratic optimisation task.
     """
+    # Coerce numpy scalars (e.g. produced by the f3dasm random
+    # sampler over an int-typed domain) back to Python ints so the
+    # tag round-trips through ``json.dumps`` in ``Task.save``.
+    seed = int(seed)
+    dimensionality = int(dimensionality)
+
     tag = {}
     tag["seed"] = seed
 
-    key = jr.key(int(seed))
+    key = jr.key(seed)
 
     model_key, dataset_key, batch_key = jr.split(key, 3)
 
