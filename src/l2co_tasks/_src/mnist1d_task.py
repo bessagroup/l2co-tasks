@@ -1,4 +1,26 @@
-"""MNIST-1D classification task creation and dataset handling."""
+"""Ten-class MNIST-1D classification task with an MLP.
+
+MNIST-1D (Greydanus, 2020) is a compact 1-D analogue of MNIST: each
+sample is a length-40 vector (shape ``(40,)``) and an integer label in
+``0..9``. Samples are generated with the ``mnist1d`` package, cached to
+``.npz`` and trained in mini-batches.
+
+The model is a fixed-architecture MLP, ``40 -> 16 -> 16 -> 10`` with
+``tanh`` hidden activations and a linear (logit) output layer; its
+width and depth are not configurable from the factory. The loss is the
+softmax cross-entropy between the output logits and the integer labels
+(no L2 regularisation).
+
+References
+----------
+Greydanus, "Scaling down Deep Learning", 2020 (MNIST-1D).
+
+Public API
+----------
+create_mnist1d_task
+    Build an MNIST-1D :class:`Task` from ``dataset_path``,
+    ``dataset_size``, ``seed`` and ``batch_size``.
+"""
 
 from pathlib import Path
 

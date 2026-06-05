@@ -1,4 +1,28 @@
-"""Gaussian meta-learning task for learning Adam hyperparameters."""
+"""Meta-optimisation task: tuning Adam hyperparameters.
+
+This is a bi-level task whose parameters are *not* network weights but
+three Adam hyperparameters. The model is a 3-vector in ``[0, 1]^3``
+that is decoded into a learning rate ``10^(-5 + 7 * x0)`` and momenta
+``b1 = 0.85 + 0.15 * x1`` and ``b2 = 0.85 + 0.15 * x2``.
+
+Evaluating the loss runs an inner optimisation: it trains a fresh MLP
+classifier with Adam, using the decoded hyperparameters, for
+``inner_steps`` steps on a Gaussian-blob dataset (see
+:mod:`l2co_tasks._src.task_gaussian_class`) under a softmax
+cross-entropy + L2 objective, and returns the *final* inner loss. The
+outer optimiser therefore searches for the hyperparameters that train
+the inner model best.
+
+Note that the inner MLP is fixed at ``in=2, out=2, width=2, depth=2``;
+``dim_points`` only shapes the generated dataset, not the inner network.
+
+Public API
+----------
+create_gaussian_meta_task
+    Build a meta-optimisation :class:`Task` from ``seed``,
+    ``dataset_path``, the dataset shape, ``inner_steps`` and
+    ``l2_regularization``.
+"""
 
 from functools import partial
 from pathlib import Path

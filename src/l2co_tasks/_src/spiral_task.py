@@ -1,4 +1,23 @@
-"""Spiral dataset classification task using RNN models."""
+"""Two-spiral binary classification task with a GRU-RNN.
+
+The synthetic dataset arranges points along two interleaved spirals,
+one per class. Each sample is a length-16 sequence of ``(sin, cos)``
+features (shape ``(16, 2)``) traced along a spiral, with binary labels
+in ``{0, 1}``; the two classes are mirror images of one another.
+
+The model is a recurrent network: a ``GRUCell`` (input size 2, width
+``hidden_size``) scanned over the 16 timesteps with ``jax.lax.scan``,
+followed by a bias-free linear read-out and a sigmoid, producing a
+scalar probability per sequence. The loss is mean-squared error
+against the ``{0, 1}`` label. The dataset is generated once, cached to
+``.npz`` and trained in mini-batches.
+
+Public API
+----------
+create_spiral_task
+    Build a spiral :class:`Task` from ``hidden_size``,
+    ``dataset_size``, ``dataset_path``, ``seed`` and ``batch_size``.
+"""
 
 # Local
 import math

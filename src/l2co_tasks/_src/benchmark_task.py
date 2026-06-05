@@ -1,4 +1,30 @@
-"""Benchmark optimization task creation for BBOB and CEC2005 functions."""
+"""Black-box benchmark optimisation tasks (BBOB and CEC2005).
+
+Each task minimises a scalar benchmark objective ``f(x)`` drawn from
+the ``bbob_jax`` registry: the BBOB suite (sphere, Rosenbrock,
+Rastrigin, ...) or the CEC2005 suite. The model is a ``d``-vector
+initialised at the origin and optimised over the normalised domain
+``[0, 1]^d``; the loss rescales it to the function's native bounds via
+``scale_input`` (``[-5, 5]^d`` for BBOB, per-function bounds for
+CEC2005) before evaluating ``f``.
+
+When ``noise > 0`` the objective is corrupted with multiplicative
+Gaussian noise, ``f(x) * (1 + e)`` with ``e ~ N(0, noise)``, which
+makes the loss stochastic (``pass_rng=True``). The CEC2005 functions
+``f4``, ``f17``, ``f24`` and ``f25`` are inherently stochastic and so
+always set ``pass_rng=True``, even with ``noise == 0``.
+
+Public API
+----------
+create_bbob_task
+    Build a BBOB :class:`Task` from ``fn_name``, ``seed``,
+    ``dimensionality`` and optional ``noise``.
+create_cec2005_task
+    Same, for a CEC2005 function.
+CEC2019Sampler
+    ``f3dasm.Block`` that enumerates the CEC-2019 suite, mapping each
+    function name to its fixed dimensionality.
+"""
 
 from __future__ import annotations
 

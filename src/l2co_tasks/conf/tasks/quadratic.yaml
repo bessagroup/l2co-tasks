@@ -4,18 +4,21 @@ sampler:
   seed: ${seed}
 sampler_kwargs:
   n_samples: 90
+
 experimentdata:
   domain:
     input:
       seed:
         type: int
         low: 0
-        high: 10000
+        high: 1000
       dimensionality:
         type: int
         low: 10
         high: 50
+
 task_kwargs:
+
 data_generator:
   _target_: l2co_tasks.create_quadratic_task
   _partial_: True

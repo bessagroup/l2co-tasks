@@ -1,4 +1,34 @@
-"""PDE optimization tasks for convection, reaction, and wave equations."""
+"""Physics-informed neural network (PINN) tasks for 1-D PDEs.
+
+A single factory builds one of three time-dependent PDE problems on a
+spatial-temporal domain ``(x, t)``, selected by ``pde_task_name``:
+
+- ``"convection"``: ``u_t + beta * u_x = 0`` with periodic boundary
+  conditions and initial condition ``u(x, 0) = sin(x)``.
+- ``"reaction"``: ``u_t - rho * u * (1 - u) = 0`` with periodic
+  boundary conditions and a Gaussian initial condition.
+- ``"wave"``: ``u_tt - 4 * u_xx = 0`` with Dirichlet boundary
+  conditions, a mixed-frequency sine initial condition and zero
+  initial velocity.
+
+The solution ``u(x, t)`` is approximated by an MLP with architecture
+``2 -> h -> h -> h -> 1`` and ``tanh`` activations; its parameters are
+the trainable model. The loss is the sum of mean-squared-error terms
+over sampled collocation points: the PDE residual, the boundary
+condition and the initial condition (plus an initial-velocity term for
+the wave equation). Derivatives are taken with ``jax.grad`` /
+``jax.jacrev``.
+
+Public API
+----------
+create_pde_task
+    Build a PINN :class:`Task` from ``pde_task_name``, ``seed``, domain
+    ranges, grid resolutions, collocation-point counts, ``hidden_size``
+    and the PDE coefficients ``beta`` / ``rho``.
+PDETaskSampler
+    ``f3dasm.Block`` that generates the three PDE tasks across a range
+    of hidden-layer sizes.
+"""
 
 # Standard
 from collections.abc import Callable

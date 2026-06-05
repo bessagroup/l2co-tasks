@@ -1,4 +1,28 @@
-"""Gaussian classification task with synthetic multi-class datasets."""
+"""Gaussian-blob binary classification task with an MLP.
+
+The synthetic dataset draws ``num_gaussians`` clusters, each a
+multivariate normal with a random mean in ``[-5, 5]^d`` and a random
+PSD covariance, and ``num_samples_per_gaussian`` points per cluster.
+Each cluster is assigned a binary label in ``{0, 1}`` (with both
+classes guaranteed present), giving inputs of shape
+``(N, dim_points)``.
+
+The model is an MLP (input ``dim_points``, output 2, ``relu`` hidden
+activations and a ``softmax`` output) with configurable ``hidden_size``
+and ``num_layers``. The loss is softmax cross-entropy plus an L2 weight
+penalty scaled by ``l2_regularization``. A reference global minimum of
+``0.322`` (from the learned-optimisation literature) is recorded on the
+task.
+
+Public API
+----------
+create_gaussian_task
+    Build a Gaussian-classification :class:`Task` from ``seed``,
+    ``dataset_path``, the dataset shape (``num_gaussians``,
+    ``num_samples_per_gaussian``, ``dim_points``),
+    ``l2_regularization`` and the model size (``hidden_size``,
+    ``num_layers``).
+"""
 
 # Standard
 from functools import partial
