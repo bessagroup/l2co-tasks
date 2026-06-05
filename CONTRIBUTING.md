@@ -8,7 +8,7 @@ You can contribute in many ways:
 
 ### Report Bugs
 
-Report bugs at https://github.com/mpvanderschelling/l2co_tasks/issues.
+Report bugs at https://github.com/bessagroup/l2co-tasks/issues.
 
 If you are reporting a bug, please include:
 
@@ -18,7 +18,7 @@ If you are reporting a bug, please include:
 
 ### Submit Feedback
 
-The best way to send feedback is to file an issue at https://github.com/mpvanderschelling/l2co_tasks/issues.
+The best way to send feedback is to file an issue at https://github.com/bessagroup/l2co-tasks/issues.
 
 ## Code of Conduct
 

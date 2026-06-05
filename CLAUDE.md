@@ -26,13 +26,14 @@ Pytest config (`[tool.pytest.ini_options]` in `pyproject.toml`) declares two mar
 
 ## Architecture
 
-Public API lives at the package root (`src/l2co_tasks/__init__.py`); all implementation is under `src/l2co_tasks/_src/` and is not meant to be imported directly. `l2co_tasks.tasks` is a secondary re-export module that exposes only the `create_*` factories. The top-level package additionally re-exports the `f3dasm.Block` samplers `CEC2019Sampler` and `PDETaskSampler` for use in `f3dasm.ExperimentData` pipelines.
+Public API lives at the package root (`src/l2co_tasks/__init__.py`); all implementation is under `src/l2co_tasks/_src/` and is not meant to be imported directly. `l2co_tasks.tasks` is a secondary re-export module that exposes only the per-family `create_*` factories (it does **not** re-export `create_tasks_experimentdata` or `retrieve_tasks`). The top-level package additionally re-exports the `f3dasm.Block` samplers `CEC2019Sampler` and `PDETaskSampler`, plus the `f3dasm.ExperimentData` helpers `create_tasks_experimentdata` and `retrieve_tasks`, for use in `f3dasm.ExperimentData` pipelines.
 
 ### The `Task` abstraction (`_src/task.py`)
 
 `Task` is an `equinox.Module` with these fields:
 - `model`: PyTree of parameters (JAX arrays or `eqx.Module`) — the only trainable part.
 - `loss_fn`: static callable with signature `loss_fn(model, ...)`; may accept a batch of data and/or an RNG key depending on the flags below.
+- `global_min` (static `float | None`): the known global minimum of the loss for this task (used for regret/gap reporting); defaults to `None`.
 - `pass_rng` (static): whether the optimizer must supply a `key` to `loss_fn`.
 - `has_aux` (static): whether `loss_fn` returns `(loss, aux)`.
 - `dataset` (static `DatasetDict | None`): `{dataset_path, batch_size, seed}` — paths only; arrays are loaded lazily via the `loaded_dataset` property. `None` (the default) means the task carries no dataset; `loaded_dataset` returns `{}` and `batch_size` returns `None` in that case.
@@ -51,6 +52,7 @@ Every family exposes a top-level `create_<name>_task(...)` factory that builds a
 - `spiral_task.py`, `mnist1d_task.py`, `task_gaussian_class.py`, `gaussian_meta.py` — supervised-learning tasks; build a model from `_src/models.py` (RNN/MLP/CNN) and wire it to a loss from `_src/loss_fn.py` (MSE or softmax cross-entropy with optional L2).
 - `pde.py` — PINN-style tasks (`create_pde_task`, `PDETaskSampler`) for convection, reaction, and wave equations using an MLP.
 - `continue_from_path.py` — `retrieve_tasks` extracts unique tasks from an `f3dasm.ExperimentData`.
+- `experimentdata.py` — `create_tasks_experimentdata` builds an `f3dasm.ExperimentData` from a collection of tasks.
 - `cifar10_task.py` — currently provides only the dataset-side helpers `download_cifar10` and `save_dataset`; `create_cifar10_task` is checked in but commented out and **not** part of the public API. Treat this module as work-in-progress and do not add it to `__init__.py` until the factory is restored.
 
 ### Conventions shared across factories
@@ -65,3 +67,15 @@ Every family exposes a top-level `create_<name>_task(...)` factory that builds a
 - Ruff is configured with a **79-char line length** and numpy-style docstrings; `__init__.py` files are exempt from `F401`/`E402`.
 - `pyproject.toml` is auto-sorted by `toml-sort` via pre-commit — editing it manually then committing will trigger a reformat.
 - GitHub workflows in `.github/workflows/` are currently fully commented out; CI is effectively not running. Don't assume pushes are gated by tests.
+
+## Related repositories
+
+Part of the L2CO ecosystem (Bessa Research Group). These repositories work together:
+
+- [l2co](https://github.com/bessagroup/L2CO) — Learning to Choose Optimizers: a meta-learner that selects an optimizer from problem features before any evaluations, then reassesses that choice from the observed optimization trajectory.
+- [rl2co](https://github.com/bessagroup/rl2co) — Reinforcement Learning to Choose Optimizers: a JAX-based RL agent that dynamically switches between optimizers during a run.
+- [l2co-tasks](https://github.com/bessagroup/l2co-tasks) — Optimization task definitions (BBOB, CEC 2005, PDE, spiral, …) compatible with the L2CO library.
+- [l2co_experiments](https://github.com/bessagroup/l2co_experiments) — Hydra + f3dasm experiment pipelines (dataset creation, training, rollouts, figures) for the L2CO studies.
+- [agentic-l2co](https://github.com/bessagroup/agentic-l2co) — An LLM-agent drop-in replacement for `l2co.L2COModel`, driving two-stage optimizer selection with an Ollama-hosted LLM.
+- [bbob-jax](https://github.com/bessagroup/bbob-jax) — JAX implementations of the BBOB and CEC 2005 black-box optimization benchmark functions.
+- [f3dasm](https://github.com/bessagroup/f3dasm) — Framework for Data-Driven Design and Analysis of Structures and Materials; provides `ExperimentData`, pipelines, and SLURM orchestration.

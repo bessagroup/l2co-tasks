@@ -2,7 +2,7 @@
 
 # L2CO Tasks
 
-| [**GitHub**](https://github.com/mpvanderschelling/l2co-tasks)
+| [**GitHub**](https://github.com/bessagroup/l2co-tasks)
 | [**Documentation**](https://l2co-tasks.readthedocs.io/en/latest/)
 
 Optimization tasks compatible with the L2CO library
@@ -40,7 +40,7 @@ Optimization tasks compatible with the L2CO library
 
 ## Community Support
 
-If you find any **issues, bugs or problems** with this package, please use the [GitHub issue tracker](https://github.com/mpvanderschelling/l2co_tasks/issues) to report them.
+If you find any **issues, bugs or problems** with this package, please use the [GitHub issue tracker](https://github.com/bessagroup/l2co-tasks/issues) to report them.
 
 ## License
 

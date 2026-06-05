@@ -62,8 +62,8 @@ tests = [
 ]
 
 [project.urls]
-bugs = "https://github.com/mpvanderschelling/l2co_tasks/issues"
-homepage = "https://github.com/mpvanderschelling/l2co_tasks"
+bugs = "https://github.com/bessagroup/l2co-tasks/issues"
+homepage = "https://github.com/bessagroup/l2co-tasks"
 
 [tool.pytest.ini_options]
 filterwarnings = [

@@ -213,3 +213,5 @@ site/
 
 # Agents
 agent-reports/
+
+.vscode/

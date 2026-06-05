@@ -32,8 +32,8 @@ site_description: Optimization tasks compatible with the L2CO library
 site_author: Martin van der Schelling
 site_url: https://l2co-tasks.readthedocs.io/en/latest/
 
-repo_url: https://github.com/mpvanderschelling/l2co_tasks
-repo_name: mpvanderschelling/l2co_tasks
+repo_url: https://github.com/bessagroup/l2co-tasks
+repo_name: bessagroup/l2co-tasks
 edit_uri: ""
 
 strict: true  # Don't allow warnings during the build process
