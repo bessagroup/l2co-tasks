@@ -54,7 +54,7 @@ task = create_bbob_task(fn_name="sphere", seed=0, dimensionality=2)
 loss = task.loss_fn(task.model)   # model is the [0, 1]^d input vector
 ```
 
-Tasks serialize to a single-file `.eqx` format via `Task.save` / `Task.load`. See the [documentation](https://l2co-tasks.readthedocs.io/en/latest/) for the full list of task families and `create_*_task` factories.
+Tasks serialize to a single-file `.eqx` format via `Task.save` / `Task.load`. See the [documentation](https://l2co-tasks.readthedocs.io/en/latest/) for the full list of task families and `create_*_task` factories. To build your own task from scratch, see the [Create your own task](./docs/create_task.ipynb) guide.
 
 ## Community Support
 

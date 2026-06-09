@@ -95,5 +95,6 @@ plugins:
 nav:
     - 'index.md'
     - 'getting_started.md'
+    - Create your own task: 'create_task.ipynb'
     - 'api.md'
     - 'license.md'

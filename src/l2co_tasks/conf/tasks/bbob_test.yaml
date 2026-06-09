@@ -11,7 +11,7 @@ experimentdata:
         type: category
         categories:
         # Separable
-          # - 'sphere'
+          - 'sphere'
           - 'rastrigin_seperable'
         # Low or moderate conditioning
           # - 'step_ellipsoid'
