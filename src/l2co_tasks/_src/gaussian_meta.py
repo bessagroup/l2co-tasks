@@ -35,7 +35,7 @@ import jax.random as jr
 import optax
 from jaxtyping import PyTree
 
-from .task import Task
+from .task import Task, dataset_dict
 from .task_gaussian_class import generate_one_gaussian_dataset, save_dataset
 
 
@@ -208,10 +208,6 @@ def create_gaussian_meta_task(
     return Task(
         model=outer_model,
         loss_fn=partial(inner_loop, key=model_key, inner_steps=inner_steps),
-        dataset={
-            "dataset_path": _path,
-            "batch_size": None,
-            "seed": None,
-        },
+        dataset=dataset_dict(_path, None),
         tag=tag,
     )

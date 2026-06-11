@@ -71,7 +71,8 @@ filterwarnings = [
 ]
 markers = [
   "slow: test writes a dataset .npz or runs an inner training loop",
-  "requires_f3dasm: test constructs an f3dasm.ExperimentData"
+  "requires_f3dasm: test constructs an f3dasm.ExperimentData",
+  "requires_l2co: drives tasks through l2co (skipped unless l2co imports)"
 ]
 testpaths = ["tests"]
 

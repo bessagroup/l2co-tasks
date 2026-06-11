@@ -1,0 +1,25 @@
+sampler:
+  _target_: l2co_tasks.StokesTaskSampler
+sampler_kwargs:
+  seed: ${seed}
+
+experimentdata:
+  domain:
+    input:
+      hidden_size:
+        type: category
+        categories:
+          - 64
+
+task_kwargs:
+
+data_generator:
+  _target_: l2co_tasks.create_stokes_task
+  _partial_: True
+
+schema:
+  dimensionality: continuous
+  task_name:
+    - stokes
+
+bounded:

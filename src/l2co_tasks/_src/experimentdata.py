@@ -4,10 +4,12 @@
 # =============================================================================
 
 # Standard
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 
 # Third-party
 from f3dasm import Block, ExperimentData, datagenerator
+from f3dasm.design import Domain
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 
@@ -20,6 +22,47 @@ __author__ = "Martin van der Schelling (M.P.vanderSchelling@tudelft.nl)"
 __credits__ = ["Martin van der Schelling"]
 __status__ = "Stable"
 # =============================================================================
+
+
+def build_task_experimentdata(
+    input_data: Iterable[dict],
+    param_names: Sequence[str],
+    project_dir: Path,
+) -> ExperimentData:
+    """Assemble an :class:`ExperimentData` of task configurations.
+
+    Shared tail for the ``*TaskSampler`` Blocks: it builds a
+    :class:`f3dasm.design.Domain` from ``param_names``, attaches the
+    on-disk ``task`` output wired to :meth:`Task.save` / :meth:`Task.load`,
+    and returns the populated ExperimentData. The samplers differ only in
+    which rows and parameter names they pass here.
+
+    Parameters
+    ----------
+    input_data : Iterable[dict]
+        One mapping of input parameters per task to materialise.
+    param_names : Sequence[str]
+        Names of the input parameters to register on the domain.
+    project_dir : Path
+        Project directory under which task files are stored.
+
+    Returns
+    -------
+    ExperimentData
+        ExperimentData with the registered domain and ``task`` output.
+    """
+    domain = Domain()
+    for name in param_names:
+        domain.add_parameter(name)
+    domain.add_output(
+        name="task",
+        to_disk=True,
+        store_function=Task.save,
+        load_function=Task.load,
+    )
+    return ExperimentData(
+        domain=domain, input_data=list(input_data), project_dir=project_dir
+    )
 
 
 def create_tasks_experimentdata(

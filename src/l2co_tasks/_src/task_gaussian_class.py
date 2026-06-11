@@ -33,13 +33,13 @@ import jax
 import jax.numpy as jnp
 import jax.random as jrd
 import jax.random as random
-import jax.tree_util as jtu
 
+from ._io import save_dataset
 from .loss_fn import mean_categorical_cross_entropy_loss_fn_l2
 from .models import mlp
 
 # Local
-from .task import Task
+from .task import Task, count_parameters, dataset_dict
 
 # =============================================================================
 
@@ -111,22 +111,6 @@ def generate_one_gaussian_dataset(
 # =============================================================================
 
 
-def save_dataset(dataset: dict[str, jnp.ndarray], path: str | Path):
-    """Save a dataset dictionary to an ``.npz`` file.
-
-    Parameters
-    ----------
-    dataset : dict[str, jnp.ndarray]
-        Dictionary of arrays to persist.
-    path : str or Path
-        Destination file path.
-    """
-    _path = Path(path)
-    _path.parent.mkdir(parents=True, exist_ok=True)
-
-    jnp.savez(path, **dataset)
-
-
 def create_gaussian_task(
     seed: int,
     dataset_path: str,
@@ -194,9 +178,7 @@ def create_gaussian_task(
     )
 
     # Count trainable parameters
-    num_params = sum(
-        p.size for p in jtu.tree_leaves(model) if isinstance(p, jnp.ndarray)
-    )
+    num_params = count_parameters(model)
     tag["dimensionality"] = num_params
 
     tag.update(model_tags)
@@ -225,7 +207,7 @@ def create_gaussian_task(
     return Task(
         model=model,
         loss_fn=loss_fn,
-        dataset={"dataset_path": _path, "batch_size": None, "seed": seed},
+        dataset=dataset_dict(_path, seed),
         tag=tag,
         global_min=global_min,
     )

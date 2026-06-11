@@ -41,16 +41,16 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax.random as jr
-import jax.tree_util as jtu
 from f3dasm import Block, ExperimentData
-from f3dasm.design import Domain
 from jax import Array
 from jaxtyping import PyTree
 
-from .models import mlp
+from ._io import save_dataset
 
 # Local
-from .task import Task
+from .experimentdata import build_task_experimentdata
+from .models import mlp
+from .task import Task, count_parameters, dataset_dict
 
 # =============================================================================
 
@@ -400,22 +400,6 @@ def create_points_dataset(
     }
 
 
-def save_dataset(dataset: dict[str, jnp.ndarray], path: str | Path):
-    """Save a PDE collocation-point dataset to ``.npz``.
-
-    Parameters
-    ----------
-    dataset : dict[str, jnp.ndarray]
-        Dictionary of arrays to persist.
-    path : str or Path
-        Destination file path.
-    """
-    _path = Path(path)
-    _path.parent.mkdir(parents=True, exist_ok=True)
-
-    jnp.savez(path, **dataset)
-
-
 def create_pde_task(
     pde_task_name: str,
     seed: int,
@@ -525,9 +509,7 @@ def create_pde_task(
     )
 
     # Count trainable parameters
-    num_params = sum(
-        p.size for p in jtu.tree_leaves(model) if isinstance(p, jnp.ndarray)
-    )
+    num_params = count_parameters(model)
     tag["dimensionality"] = num_params
 
     if not _path.exists():
@@ -546,7 +528,7 @@ def create_pde_task(
     return Task(
         model=model,
         loss_fn=loss_fn,
-        dataset={"dataset_path": _path, "batch_size": None, "seed": seed},
+        dataset=dataset_dict(_path, seed),
         tag=tag,
     )
 
@@ -647,28 +629,22 @@ class PDETaskSampler(Block):
                 )
                 task_list.append(t)
 
-        domain = Domain()
-        domain.add_parameter("pde_task_name")
-        domain.add_parameter("seed")
-        domain.add_parameter("dataset_path")
-        domain.add_parameter("hidden_size")
-        domain.add_parameter("x_range")
-        domain.add_parameter("t_range")
-        domain.add_parameter("xgrid_resolution")
-        domain.add_parameter("tgrid_resolution")
-        domain.add_parameter("num_ic_points")
-        domain.add_parameter("num_bc_points")
-        domain.add_parameter("num_res_points")
-        domain.add_parameter("beta")
-        domain.add_parameter("rho")
-
-        domain.add_output(
-            name="task",
-            to_disk=True,
-            store_function=Task.save,
-            load_function=Task.load,
-        )
-
-        return ExperimentData(
-            domain=domain, input_data=task_list, project_dir=data.project_dir
+        return build_task_experimentdata(
+            task_list,
+            (
+                "pde_task_name",
+                "seed",
+                "dataset_path",
+                "hidden_size",
+                "x_range",
+                "t_range",
+                "xgrid_resolution",
+                "tgrid_resolution",
+                "num_ic_points",
+                "num_bc_points",
+                "num_res_points",
+                "beta",
+                "rho",
+            ),
+            data.project_dir,
         )

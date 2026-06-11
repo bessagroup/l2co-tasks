@@ -1,0 +1,25 @@
+sampler:
+  _target_: l2co_tasks.InviscidBurgersTaskSampler
+sampler_kwargs:
+  seed: ${seed}
+
+experimentdata:
+  domain:
+    input:
+      hidden_size:
+        type: category
+        categories:
+          - 50
+
+task_kwargs:
+
+data_generator:
+  _target_: l2co_tasks.create_inviscid_burgers_task
+  _partial_: True
+
+schema:
+  dimensionality: continuous
+  task_name:
+    - inviscid_burgers
+
+bounded:

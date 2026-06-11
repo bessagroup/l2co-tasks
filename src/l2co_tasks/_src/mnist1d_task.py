@@ -24,14 +24,13 @@ create_mnist1d_task
 
 from pathlib import Path
 
-import jax.numpy as jnp
 import jax.random as jr
-import jax.tree_util as jtu
 from mnist1d.data import get_dataset_args, make_dataset
 
+from ._io import save_dataset
 from .loss_fn import mean_categorical_cross_entropy_loss_fn
 from .models import mlp
-from .task import Task
+from .task import Task, count_parameters, dataset_dict
 
 
 def mnist1d_dataset(dataset_size, seed: int):
@@ -54,22 +53,6 @@ def mnist1d_dataset(dataset_size, seed: int):
     defaults.seed = seed
     data = make_dataset(defaults)
     return {"x": data["x"], "y": data["y"]}
-
-
-def save_dataset(dataset: dict[str, jnp.ndarray], path: str | Path):
-    """Save a dataset dictionary to an ``.npz`` file.
-
-    Parameters
-    ----------
-    dataset : dict[str, jnp.ndarray]
-        Dictionary of arrays to persist.
-    path : str or Path
-        Destination file path.
-    """
-    _path = Path(path)
-    _path.parent.mkdir(parents=True, exist_ok=True)
-
-    jnp.savez(path, **dataset)
 
 
 def create_mnist1d_task(
@@ -114,9 +97,7 @@ def create_mnist1d_task(
     )
 
     # Count trainable parameters
-    num_params = sum(
-        p.size for p in jtu.tree_leaves(model) if isinstance(p, jnp.ndarray)
-    )
+    num_params = count_parameters(model)
     tag["dimensionality"] = num_params
 
     # Loss fn
@@ -127,10 +108,6 @@ def create_mnist1d_task(
     return Task(
         model=model,
         loss_fn=loss_fn,
-        dataset={
-            "dataset_path": dataset_path,
-            "batch_size": batch_size,
-            "seed": seed,
-        },
+        dataset=dataset_dict(dataset_path, seed, batch_size),
         tag=tag,
     )

@@ -32,7 +32,6 @@ create_quadratic_task
 """
 
 from functools import partial
-from pathlib import Path
 
 import jax.numpy as jnp
 import jax.random as jr
@@ -76,22 +75,6 @@ def generate_dataset(
     Ws = jr.normal(key_W, shape=(m, dimensionality))
     ys = jr.normal(key_y, shape=(m,))
     return {"W": Ws, "y": ys}
-
-
-def save_dataset(dataset: dict[str, jnp.ndarray], path: str | Path):
-    """Save a dataset dictionary to an ``.npz`` file.
-
-    Parameters
-    ----------
-    dataset : dict[str, jnp.ndarray]
-        Dictionary of arrays to persist.
-    path : str or Path
-        Destination file path.
-    """
-    _path = Path(path)
-    _path.parent.mkdir(parents=True, exist_ok=True)
-
-    jnp.savez(path, **dataset)
 
 
 # =============================================================================

@@ -1,4 +1,4 @@
-"""Dataset loading helpers."""
+"""Dataset loading and saving helpers."""
 
 #                                                                       Modules
 # =============================================================================
@@ -35,3 +35,22 @@ def load_dataset(path: str | Path | None) -> dict[str, jnp.ndarray]:
         return {}
     with np.load(Path(path).with_suffix(".npz")) as loaded_data:
         return {k: jnp.asarray(loaded_data[k]) for k in loaded_data.files}
+
+
+def save_dataset(dataset: dict[str, jnp.ndarray], path: str | Path) -> None:
+    """Save a dataset of arrays to an ``.npz`` file.
+
+    Creates the parent directory if needed. The write-side twin of
+    :func:`load_dataset`; the task factories delegate here rather than
+    each carrying its own copy.
+
+    Parameters
+    ----------
+    dataset : dict[str, jnp.ndarray]
+        Dictionary of arrays to persist.
+    path : str | Path
+        Destination file path.
+    """
+    _path = Path(path)
+    _path.parent.mkdir(parents=True, exist_ok=True)
+    jnp.savez(path, **dataset)

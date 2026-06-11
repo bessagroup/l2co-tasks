@@ -2,7 +2,7 @@
 Neural network model architectures (RNN, MLP, CNN) for optimization tasks.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 import equinox as eqx
@@ -436,3 +436,211 @@ def cnn(
             "in_channels": in_channels,
         },
     )
+
+
+# =============================================================================
+
+
+class FourierFeatures(eqx.Module):
+    """Periodic Fourier-feature embedding of input coordinates.
+
+    Maps an input coordinate vector ``x`` of shape ``(d,)`` to the
+    feature vector formed by stacking, for every coordinate and every
+    requested mode ``k``, the pair ``(cos(2*pi*k*x/L), sin(2*pi*k*x/L))``.
+    The output has shape ``(d * len(modes) * 2,)``. The frequencies are
+    fixed (non-trainable), so this layer adds no parameters and makes the
+    downstream network exactly periodic with period ``length`` (paper
+    Eq. 40).
+
+    Parameters
+    ----------
+    modes : tuple[int, ...]
+        Integer frequencies ``k`` to include (e.g. ``(1,)`` for a single
+        mode, ``(1, 2)`` for ``k_max = 2``).
+    length : float
+        Spatial period ``L`` (domain length) used to normalise the
+        frequencies.
+    """
+
+    modes: tuple[int, ...] = eqx.field(static=True)
+    length: float = eqx.field(static=True)
+
+    def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
+        """Embed coordinate vector ``x`` into periodic Fourier features.
+
+        Parameters
+        ----------
+        x : jnp.ndarray
+            Input coordinates of shape ``(d,)``.
+
+        Returns
+        -------
+        jnp.ndarray
+            Feature vector of shape ``(d * len(modes) * 2,)``.
+        """
+        k = jnp.asarray(self.modes, dtype=x.dtype)
+        arg = 2.0 * jnp.pi * x[:, None] * k[None, :] / self.length
+        feats = jnp.concatenate([jnp.cos(arg), jnp.sin(arg)], axis=-1)
+        return feats.reshape(-1)
+
+
+class FourierMLP(eqx.Module):
+    """An MLP fed by a periodic Fourier-feature embedding.
+
+    The embedding (:class:`FourierFeatures`) is applied to the raw input
+    coordinates before the multilayer perceptron, enforcing exact spatial
+    periodicity. Used by the Helmholtz PINN tasks.
+
+    Parameters
+    ----------
+    features : FourierFeatures
+        The periodic embedding layer.
+    mlp : MLP
+        The multilayer perceptron consuming the embedded features.
+    """
+
+    features: FourierFeatures
+    mlp: MLP
+
+    def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
+        """Forward pass: embed ``x`` then apply the MLP.
+
+        Parameters
+        ----------
+        x : jnp.ndarray
+            Raw input coordinates of shape ``(d,)``.
+
+        Returns
+        -------
+        jnp.ndarray
+            Network output.
+        """
+        return self.mlp(self.features(x))
+
+
+def fourier_mlp(
+    in_dim: int,
+    out_size: int,
+    modes: Sequence[int],
+    length: float,
+    hidden_size: int,
+    num_layers: int,
+    hidden_activation: Callable = jax.nn.tanh,
+    *,
+    key,
+) -> tuple[eqx.Module, dict[str, Any]]:
+    """Create a Fourier-feature MLP model.
+
+    Parameters
+    ----------
+    in_dim : int
+        Number of raw input coordinates.
+    out_size : int
+        Output size of the MLP.
+    modes : Sequence[int]
+        Integer Fourier frequencies to embed (see
+        :class:`FourierFeatures`).
+    length : float
+        Spatial period ``L`` used to normalise the frequencies.
+    hidden_size : int
+        Size of the hidden layers.
+    num_layers : int
+        Number of layers in the MLP.
+    hidden_activation : Callable, optional
+        Activation function for hidden layers, by default ``jax.nn.tanh``.
+    key : jax.random.PRNGKey
+        Random key for initializing the model.
+
+    Returns
+    -------
+    tuple[eqx.Module, dict[str, Any]]
+        The Fourier MLP model and its metadata dictionary.
+    """
+    modes = tuple(int(m) for m in modes)
+    feat_dim = in_dim * len(modes) * 2
+    model = FourierMLP(
+        features=FourierFeatures(modes=modes, length=float(length)),
+        mlp=MLP(
+            feat_dim,
+            out_size,
+            hidden_size,
+            num_layers,
+            hidden_activation=hidden_activation,
+            key=key,
+        ),
+    )
+    return (
+        model,
+        {
+            "model": "fourier_mlp",
+            "in_dim": in_dim,
+            "out_size": out_size,
+            "modes": modes,
+            "length": float(length),
+            "hidden_size": hidden_size,
+            "num_layers": num_layers,
+            "hidden_activation": hidden_activation.__name__,
+        },
+    )
+
+
+# =============================================================================
+
+
+class MultiNet(eqx.Module):
+    """Container bundling several named sub-networks into one model.
+
+    Lets a single :class:`~l2co_tasks.Task` hold more than one trainable
+    network (e.g. the solution network and the flux network of the
+    inviscid-Burgers PINN). Sub-networks are accessed by name via
+    ``net["u"]`` or by position via ``net[0]``; all of their parameters
+    are ordinary inexact-array leaves, so ``Task.dimensionality`` and the
+    JAX transforms (``jit`` / ``vmap`` / ``grad``) work unchanged.
+
+    Parameters
+    ----------
+    nets : tuple
+        The sub-network modules, in registration order.
+    names : tuple[str, ...]
+        Names aligned with ``nets`` for keyed access.
+    """
+
+    nets: tuple
+    names: tuple[str, ...] = eqx.field(static=True)
+
+    def __getitem__(self, key: int | str) -> eqx.Module:
+        """Return a sub-network by integer position or string name.
+
+        Parameters
+        ----------
+        key : int or str
+            Position in ``nets`` or a name in ``names``.
+
+        Returns
+        -------
+        eqx.Module
+            The requested sub-network.
+        """
+        if isinstance(key, str):
+            return self.nets[self.names.index(key)]
+        return self.nets[key]
+
+
+def multinet(
+    nets: dict[str, eqx.Module],
+) -> tuple[eqx.Module, dict[str, Any]]:
+    """Bundle named sub-networks into a :class:`MultiNet`.
+
+    Parameters
+    ----------
+    nets : dict[str, eqx.Module]
+        Mapping from sub-network name to module.
+
+    Returns
+    -------
+    tuple[eqx.Module, dict[str, Any]]
+        The :class:`MultiNet` model and its metadata dictionary.
+    """
+    names = tuple(nets.keys())
+    model = MultiNet(nets=tuple(nets[n] for n in names), names=names)
+    return model, {"model": "multinet", "names": names}

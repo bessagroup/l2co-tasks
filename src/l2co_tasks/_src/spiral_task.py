@@ -26,13 +26,13 @@ from pathlib import Path
 # Third-party
 import jax.numpy as jnp
 import jax.random as jrd
-import jax.tree_util as jtu
 
+from ._io import save_dataset
 from .loss_fn import mse_loss_fn
 from .models import rnn
 
 # Local
-from .task import Task
+from .task import Task, count_parameters, dataset_dict
 
 # =============================================================================
 
@@ -65,22 +65,6 @@ def spiral_dataset(dataset_size, *, key: jrd.PRNGKey):
     x = jnp.stack([x1, x2], axis=-1)
 
     return {"x": x, "y": y}
-
-
-def save_dataset(dataset: dict[str, jnp.ndarray], path: str | Path):
-    """Save a dataset dictionary to an ``.npz`` file.
-
-    Parameters
-    ----------
-    dataset : dict[str, jnp.ndarray]
-        Dictionary of arrays to persist.
-    path : str or Path
-        Destination file path.
-    """
-    _path = Path(path)
-    _path.parent.mkdir(parents=True, exist_ok=True)
-
-    jnp.savez(path, **dataset)
 
 
 def create_spiral_task(
@@ -131,9 +115,7 @@ def create_spiral_task(
     )
 
     # Count trainable parameters
-    num_params = sum(
-        p.size for p in jtu.tree_leaves(model) if isinstance(p, jnp.ndarray)
-    )
+    num_params = count_parameters(model)
     tag["dimensionality"] = num_params
 
     tag.update(model_tags)
@@ -150,10 +132,6 @@ def create_spiral_task(
     return Task(
         model=model,
         loss_fn=loss_fn,
-        dataset={
-            "dataset_path": dataset_path,
-            "batch_size": batch_size,
-            "seed": seed,
-        },
+        dataset=dataset_dict(dataset_path, seed, batch_size),
         tag=tag,
     )

@@ -24,8 +24,8 @@ data_generator:
   _partial_: True
 
 # Default values (override via CLI)
-fn_name: rastrigin
-fn_dim: 5
+fn_name: gallagher_21_peaks
+fn_dim: 20
 
 schema:
   dimensionality: continuous

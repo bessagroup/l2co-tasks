@@ -1,0 +1,27 @@
+sampler:
+  _target_: l2co_tasks.HelmholtzTaskSampler
+sampler_kwargs:
+  seed: ${seed}
+
+experimentdata:
+  domain:
+    input:
+      hidden_size:
+        type: category
+        categories:
+          - 30
+
+task_kwargs:
+
+data_generator:
+  _target_: l2co_tasks.create_helmholtz_task
+  _partial_: True
+
+schema:
+  # Feature schema used by FeatureProcessor to encode task metadata.
+  dimensionality: continuous
+  task_name:
+    - helmholtz
+
+# Optimization domain (PINN parameters are unconstrained).
+bounded:

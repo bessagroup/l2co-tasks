@@ -1,0 +1,25 @@
+sampler:
+  _target_: l2co_tasks.PKPDTaskSampler
+sampler_kwargs:
+  seed: ${seed}
+
+experimentdata:
+  domain:
+    input:
+      hidden_size:
+        type: category
+        categories:
+          - 32
+
+task_kwargs:
+
+data_generator:
+  _target_: l2co_tasks.create_pkpd_task
+  _partial_: True
+
+schema:
+  dimensionality: continuous
+  task_name:
+    - pkpd
+
+bounded:

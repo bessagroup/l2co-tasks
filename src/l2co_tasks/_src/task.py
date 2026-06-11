@@ -32,6 +32,30 @@ __status__ = "Stable"
 # =============================================================================
 
 
+def count_parameters(model: PyTree) -> int:
+    """Count the trainable (inexact-array) parameters of a model.
+
+    The single source of truth for a model's dimensionality:
+    :attr:`Task.dimensionality` and the ``tag["dimensionality"]`` written
+    by the task factories both delegate here, so the property and the tag
+    can never diverge.
+
+    Parameters
+    ----------
+    model : PyTree
+        Model whose inexact-array (floating-point) leaves are counted.
+
+    Returns
+    -------
+    int
+        Total number of trainable parameters.
+    """
+    return sum(
+        p.size
+        for p in jtu.tree_leaves(eqx.filter(model, eqx.is_inexact_array))
+    )
+
+
 class DatasetDict(TypedDict):
     """
     Dictionary describing a dataset configuration.
@@ -40,15 +64,46 @@ class DatasetDict(TypedDict):
     ----------
     dataset_path : str
         Path to the dataset file.
-    batch_size : int
-        Batch size for loading the dataset.
+    batch_size : int or None
+        Batch size for loading the dataset; ``None`` means full-batch.
     seed : int
         Random seed for dataset operations.
     """
 
     dataset_path: str
-    batch_size: int
+    batch_size: int | None
     seed: int
+
+
+def dataset_dict(
+    dataset_path: str | os.PathLike,
+    seed: int,
+    batch_size: int | None = None,
+) -> DatasetDict:
+    """Build a :class:`DatasetDict` for a task's ``dataset`` field.
+
+    Centralises the key names and the full-batch (``batch_size=None``)
+    default that the task factories would otherwise spell out inline.
+
+    Parameters
+    ----------
+    dataset_path : str or os.PathLike
+        Path to the ``.npz`` dataset file.
+    seed : int
+        Random seed associated with the dataset.
+    batch_size : int or None, optional
+        Minibatch size, or ``None`` (default) for full-batch evaluation.
+
+    Returns
+    -------
+    DatasetDict
+        The dataset configuration mapping.
+    """
+    return {
+        "dataset_path": dataset_path,
+        "batch_size": batch_size,
+        "seed": seed,
+    }
 
 
 # =============================================================================
@@ -134,12 +189,7 @@ class Task(eqx.Module):
         int
             Dimensionality of the model.
         """
-        return sum(
-            p.size
-            for p in jtu.tree_leaves(
-                eqx.filter(self.model, eqx.is_inexact_array)
-            )
-        )
+        return count_parameters(self.model)
 
     @property
     def tag_hashable(self) -> tuple[tuple[str, Any]]:

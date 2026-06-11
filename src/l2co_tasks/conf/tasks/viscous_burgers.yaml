@@ -1,0 +1,25 @@
+sampler:
+  _target_: l2co_tasks.ViscousBurgersTaskSampler
+sampler_kwargs:
+  seed: ${seed}
+
+experimentdata:
+  domain:
+    input:
+      hidden_size:
+        type: category
+        categories:
+          - 20
+
+task_kwargs:
+
+data_generator:
+  _target_: l2co_tasks.create_viscous_burgers_task
+  _partial_: True
+
+schema:
+  dimensionality: continuous
+  task_name:
+    - viscous_burgers
+
+bounded:

@@ -6,7 +6,6 @@ import urllib.request
 from pathlib import Path
 
 # Third-party
-import jax.numpy as jnp
 import numpy as np
 
 # =============================================================================
@@ -67,22 +66,6 @@ def download_cifar10():
     # cifar_path.rmdir()
 
     return {"x": data_dict[b"data"], "y": data_dict[b"labels"]}
-
-
-def save_dataset(dataset: dict[str, jnp.ndarray], path: str | Path):
-    """Save a dataset dictionary to an ``.npz`` file.
-
-    Parameters
-    ----------
-    dataset : dict[str, jnp.ndarray]
-        Dictionary of arrays to persist.
-    path : str or Path
-        Destination file path.
-    """
-    _path = Path(path)
-    _path.parent.mkdir(parents=True, exist_ok=True)
-
-    jnp.savez(path, **dataset)
 
 
 # def create_cifar10_task(

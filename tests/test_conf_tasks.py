@@ -121,13 +121,107 @@ _OVERLAYS: dict[str, dict] = {
         "sampler_kwargs": {"n_samples": 2},
         "task_kwargs": {"dataset_size": 64, "batch_size": 8},
     },
+    # PINN families: shrink the collocation grids (sampler init kwargs)
+    # and the network so each task is cheap to build.
+    "helmholtz": {
+        "sampler": {"num_res_points": 16},
+        "experimentdata": {
+            "domain": {
+                "input": {
+                    "hidden_size": {"type": "category", "categories": [4]}
+                }
+            }
+        },
+    },
+    "viscous_burgers": {
+        "sampler": {
+            "num_res_points": 16,
+            "num_ic_points": 8,
+            "num_bc_points": 8,
+        },
+        "experimentdata": {
+            "domain": {
+                "input": {
+                    "hidden_size": {"type": "category", "categories": [4]}
+                }
+            }
+        },
+    },
+    "inviscid_burgers": {
+        "sampler": {
+            "num_res_points": 16,
+            "num_ic_points": 8,
+            "num_bc_points": 8,
+        },
+        "experimentdata": {
+            "domain": {
+                "input": {
+                    "hidden_size": {"type": "category", "categories": [4]}
+                }
+            }
+        },
+    },
+    "euler": {
+        "sampler": {
+            "num_res_points": 16,
+            "num_ic_points": 8,
+            "num_bc_points": 8,
+        },
+        "experimentdata": {
+            "domain": {
+                "input": {
+                    "hidden_size": {"type": "category", "categories": [4]}
+                }
+            }
+        },
+    },
+    "stokes": {
+        "sampler": {
+            "num_res_points": 32,
+            "num_lid_points": 8,
+            "num_wall_points": 8,
+        },
+        "experimentdata": {
+            "domain": {
+                "input": {
+                    "hidden_size": {"type": "category", "categories": [4]}
+                }
+            }
+        },
+    },
+    "pkpd": {
+        "sampler": {
+            "point_allocation": [
+                [0.0, 1.9, 8],
+                [1.9, 4.0, 8],
+                [4.0, 17.0, 8],
+            ]
+        },
+        "experimentdata": {
+            "domain": {
+                "input": {
+                    "hidden_size": {"type": "category", "categories": [4]}
+                }
+            }
+        },
+    },
 }
 
 # Configs that take noticeably longer than the others — typically because
 # the data generator builds an on-disk dataset (mnist1d, spirals) or
 # solves PDE residuals (pde). Marked ``slow`` so ``pytest -m 'not slow'``
 # skips them in fast inner loops.
-_SLOW = {"mnist1d", "pde", "spirals"}
+_SLOW = {
+    "mnist1d",
+    "pde",
+    "spirals",
+    "helmholtz",
+    "viscous_burgers",
+    "inviscid_burgers",
+    "euler",
+    "stokes",
+    "pkpd",
+}
 
 
 def _shipped_yaml_names() -> list[str]:

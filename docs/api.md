@@ -42,6 +42,30 @@ The single object every factory returns: a serializable bundle of a model, a los
 
 ::: l2co_tasks.create_pde_task
 
+## Helmholtz equation (PINN)
+
+::: l2co_tasks.create_helmholtz_task
+
+## Viscous Burgers equation (PINN)
+
+::: l2co_tasks.create_viscous_burgers_task
+
+## Inviscid Burgers equation (PINN)
+
+::: l2co_tasks.create_inviscid_burgers_task
+
+## Euler equations (PINN)
+
+::: l2co_tasks.create_euler_task
+
+## Stokes wedge flow (PINN)
+
+::: l2co_tasks.create_stokes_task
+
+## Stiff PK-PD ODE (PINN)
+
+::: l2co_tasks.create_pkpd_task
+
 ## `f3dasm` integration
 
 Helpers for enumerating task suites as `f3dasm.Block` samplers and for
@@ -50,6 +74,18 @@ moving tasks in and out of an `f3dasm.ExperimentData`.
 ::: l2co_tasks.CEC2019Sampler
 
 ::: l2co_tasks.PDETaskSampler
+
+::: l2co_tasks.HelmholtzTaskSampler
+
+::: l2co_tasks.ViscousBurgersTaskSampler
+
+::: l2co_tasks.InviscidBurgersTaskSampler
+
+::: l2co_tasks.EulerTaskSampler
+
+::: l2co_tasks.StokesTaskSampler
+
+::: l2co_tasks.PKPDTaskSampler
 
 ::: l2co_tasks.create_tasks_experimentdata
 
