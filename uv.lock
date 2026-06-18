@@ -790,7 +790,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'tests'", specifier = ">=8.4.1" },
     { name = "pytest-cov", marker = "extra == 'tests'", specifier = ">=6.2.1" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.14.10" },
-    { name = "setuptools", marker = "extra == 'dev'", specifier = ">=43.0.0" },
+    { name = "setuptools", marker = "extra == 'dev'", specifier = ">=77.0.0" },
     { name = "wheel", marker = "extra == 'dev'" },
 ]
 provides-extras = ["dev", "docs", "tests"]

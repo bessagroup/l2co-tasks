@@ -1,13 +1,12 @@
 [build-system]
 build-backend = "setuptools.build_meta"
-requires = ["setuptools>=43.0.0", "wheel"]
+requires = ["setuptools>=77.0.0", "wheel"]
 
 [project]
 authors = [
   {email = "m.p.vanderschelling@tudelft.nl", name = "Martin van der Schelling"}
 ]
 classifiers = [
-  "License :: OSI Approved :: BSD License",
   "Intended Audience :: Science/Research",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
   "Topic :: Software Development :: Libraries :: Python Modules",
@@ -29,7 +28,7 @@ dependencies = [
 ]
 description = "Optimization tasks compatible with the L2CO library"
 keywords = ["optimization", "tasks", "benchmarking"]
-license = {text = "BSD-3-Clause"}
+license = "BSD-3-Clause"
 maintainers = [
   {email = "m.p.vanderschelling@tudelft.nl", name = "Martin van der Schelling"}
 ]
@@ -40,7 +39,7 @@ version = "0.1.0"
 
 [project.optional-dependencies]
 dev = [
-  "setuptools>=43.0.0",
+  "setuptools>=77.0.0",
   "build",
   "wheel",
   "pre-commit>=4.4.0",

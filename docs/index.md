@@ -56,6 +56,47 @@ loss = task.loss_fn(task.model)   # model is the [0, 1]^d input vector
 
 Tasks serialize to a single-file `.eqx` format via `Task.save` / `Task.load`. See the [API reference](api.md) for the full list of task families and `create_*_task` factories. To build your own task from scratch, see the [Create your own task](create_task.ipynb) guide.
 
+## Available tasks
+
+Every task is built by a `create_<name>_task(...)` factory and returned as a single `Task` object. The package ships the following families:
+
+| Category | Task | Factory | Description | Reference |
+|---|---|---|---|---|
+| Black-box | BBOB | `create_bbob_task` | 24 analytic, noiseless black-box functions over `[0, 1]^d`; optional multiplicative Gaussian noise. | [bbob-jax](https://github.com/bessagroup/bbob-jax) |
+| Black-box | CEC 2005 | `create_cec2005_task` | CEC 2005 real-parameter functions with per-function bounds; `f4/f17/f24/f25` are stochastic. | [bbob-jax](https://github.com/bessagroup/bbob-jax) |
+| Least-squares | Random quadratic | `create_quadratic_task` | Minimize `\|\|W x - y\|\|^2` for random Gaussian `W`, `y` (square or over-determined). | Maheswaranathan et al. (2019) |
+| Supervised | Two-spiral | `create_spiral_task` | GRU-RNN trained with MSE to separate two interleaved spirals. | — |
+| Supervised | MNIST-1D | `create_mnist1d_task` | MLP softmax classifier on the 1-D MNIST surrogate dataset. | [Greydanus (2020)](https://github.com/greydanus/mnist1d) |
+| Supervised | Gaussian blobs | `create_gaussian_task` | MLP classifier (cross-entropy + L2) on Gaussian-cluster data. | — |
+| Meta-learning | Adam hyperparameters | `create_gaussian_meta_task` | Outer objective tunes Adam's `(lr, b1, b2)` for an inner MLP training run. | — |
+| PINN | 1-D PDE | `create_pde_task` | MLP PINN for the `convection`, `reaction`, or `wave` equation (collocation-residual MSE). | — |
+| PINN | Helmholtz | `create_helmholtz_task` | Fourier-feature MLP for the 2-D/3-D Helmholtz equation. | Jnini et al. (2026) |
+| PINN | Stokes | `create_stokes_task` | MLP for lid-driven Stokes flow in a wedge (Moffatt eddies). | Jnini et al. (2026) |
+| PINN | Viscous Burgers | `create_viscous_burgers_task` | MLP for the 2+1-D viscous Burgers equation with closed-form targets. | Jnini et al. (2026) |
+| PINN | Inviscid Burgers | `create_inviscid_burgers_task` | Two-network `MultiNet` with entropy consistency for the shock-forming inviscid Burgers law. | Jnini et al. (2026) |
+| PINN | Euler (Sod) | `create_euler_task` | MLP for the 1-D compressible Euler shock tube; viscous warm-up + inviscid HLLC stages. | Jnini et al. (2026) |
+| PINN | Stiff PK-PD | `create_pkpd_task` | MLP for a stiff pharmacokinetic–pharmacodynamic ODE (paclitaxel). | Jnini et al. (2026) |
+
+The physics-informed suite reproduces the benchmarks of **Jnini et al. (2026)**, *Curvature-aware optimization for high-accuracy physics-informed neural networks*, [arXiv:2604.05230](https://arxiv.org/abs/2604.05230).
+
+## Hydra task configurations
+
+For large-scale studies, `l2co-tasks` ships ready-made [Hydra](https://hydra.cc) config groups under `l2co_tasks/conf/tasks/` (installed as package data). Each YAML describes a whole **task distribution** rather than a single task: an [`f3dasm`](https://github.com/bessagroup/f3dasm) sampler and domain (for example the grid over `fn_name × dimensionality × seed`), a `data_generator` pointing at the matching `create_*_task` factory, a feature `schema`, and the optimization bounds. Suites are provided for every family — `bbob`, `bbob_small`, `bbob_holdout`, `cec2005`, `quadratic`, `spirals`, `mnist1d`, `gaussian_classification`, `gaussian_meta`, and one per PINN problem (`helmholtz`, `stokes`, `viscous_burgers`, `inviscid_burgers`, `euler`, `pkpd`, `pde`).
+
+Downstream applications such as [`l2co_experiments`](https://github.com/bessagroup/l2co_experiments) consume these by adding `l2co-tasks` to the Hydra search path and selecting a suite by name:
+
+```yaml
+# in your primary Hydra config
+hydra:
+  searchpath:
+    - pkg://l2co_tasks.conf
+
+defaults:
+  - tasks: bbob          # any file in l2co_tasks/conf/tasks/
+```
+
+The selected suite can be overridden from the command line (e.g. `... tasks=cec2005`) and materialized into an `f3dasm.ExperimentData` of `Task` objects via `create_tasks_experimentdata(config=config.tasks, ...)`.
+
 ## Community Support
 
 If you find any **issues, bugs or problems** with this package, please use the [GitHub issue tracker](https://github.com/bessagroup/l2co-tasks/issues) to report them.
