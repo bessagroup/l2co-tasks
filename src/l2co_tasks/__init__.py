@@ -15,6 +15,7 @@ from ._src.continue_from_path import retrieve_tasks
 from ._src.euler import EulerTaskSampler, create_euler_task
 from ._src.experimentdata import create_tasks_experimentdata
 from ._src.gaussian_meta import create_gaussian_meta_task
+from ._src.global_min import estimate_global_min
 from ._src.helmholtz import HelmholtzTaskSampler, create_helmholtz_task
 from ._src.inviscid_burgers import (
     InviscidBurgersTaskSampler,
@@ -67,5 +68,6 @@ __all__ = [
     "create_stokes_task",
     "create_tasks_experimentdata",
     "create_viscous_burgers_task",
+    "estimate_global_min",
     "retrieve_tasks",
 ]

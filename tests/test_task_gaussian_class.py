@@ -22,6 +22,8 @@ def test_create_gaussian_task_fields(tmp_path):
         l2_regularization=0.01,
         hidden_size=2,
         num_layers=2,
+        global_min_restarts=2,
+        global_min_steps=10,
     )
     assert isinstance(task, Task)
     assert task.name == "gaussian_classification"
@@ -30,7 +32,11 @@ def test_create_gaussian_task_fields(tmp_path):
     assert task.tag["dim_points"] == 2
     assert task.tag["l2_regularization"] == 0.01
     assert task.tag["separable"] is False and task.tag["unimodal"] is False
-    assert task.global_min == pytest.approx(0.322)
+    # global_min is benchmarked at creation (overlapping classes forbid a
+    # known closed-form minimum); it must be a finite, positive estimate.
+    assert task.global_min is not None
+    assert jnp.isfinite(task.global_min)
+    assert task.global_min > 0.0
     assert task.dimensionality == task.tag["dimensionality"]
     assert Path(str(ds_base) + "_0.npz").exists()
 
@@ -44,6 +50,8 @@ def test_create_gaussian_task_loss_and_round_trip(tmp_path):
         num_samples_per_gaussian=4,
         dim_points=2,
         l2_regularization=0.01,
+        global_min_restarts=2,
+        global_min_steps=10,
     )
     ds = task.loaded_dataset
     before = float(task.loss_fn(task.model, ds["x"], ds["y"]))

@@ -110,16 +110,31 @@ _OVERLAYS: dict[str, dict] = {
                 }
             }
         },
+        # Tiny global_min benchmark so the empirical estimate stays cheap.
+        "task_kwargs": {"global_min_restarts": 2, "global_min_steps": 10},
     },
-    "gaussian_meta": {"sampler_kwargs": {"n_samples": 2}},
+    "gaussian_meta": {
+        "sampler_kwargs": {"n_samples": 2},
+        "task_kwargs": {"global_min_restarts": 2, "global_min_steps": 5},
+    },
     "quadratic": {"sampler_kwargs": {"n_samples": 3}},
     "mnist1d": {
         "sampler_kwargs": {"n_samples": 2},
-        "task_kwargs": {"dataset_size": 64, "batch_size": 8},
+        "task_kwargs": {
+            "dataset_size": 64,
+            "batch_size": 8,
+            "global_min_restarts": 2,
+            "global_min_steps": 10,
+        },
     },
     "spirals": {
         "sampler_kwargs": {"n_samples": 2},
-        "task_kwargs": {"dataset_size": 64, "batch_size": 8},
+        "task_kwargs": {
+            "dataset_size": 64,
+            "batch_size": 8,
+            "global_min_restarts": 2,
+            "global_min_steps": 10,
+        },
     },
     # PINN families: shrink the collocation grids (sampler init kwargs)
     # and the network so each task is cheap to build.

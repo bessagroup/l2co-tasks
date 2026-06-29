@@ -60,28 +60,34 @@ Tasks serialize to a single-file `.eqx` format via `Task.save` / `Task.load`. Se
 
 Every task is built by a `create_<name>_task(...)` factory and returned as a single `Task` object. The package ships the following families:
 
-| Category | Task | Factory | Description | Reference |
-|---|---|---|---|---|
-| Black-box | BBOB | `create_bbob_task` | 24 analytic, noiseless black-box functions over `[0, 1]^d`; optional multiplicative Gaussian noise. | [bbob-jax](https://github.com/bessagroup/bbob-jax) |
-| Black-box | CEC 2005 | `create_cec2005_task` | CEC 2005 real-parameter functions with per-function bounds; `f4/f17/f24/f25` are stochastic. | [bbob-jax](https://github.com/bessagroup/bbob-jax) |
-| Least-squares | Random quadratic | `create_quadratic_task` | Minimize `\|\|W x - y\|\|^2` for random Gaussian `W`, `y` (square or over-determined). | Maheswaranathan et al. (2019) |
-| Supervised | Two-spiral | `create_spiral_task` | GRU-RNN trained with MSE to separate two interleaved spirals. | — |
-| Supervised | MNIST-1D | `create_mnist1d_task` | MLP softmax classifier on the 1-D MNIST surrogate dataset. | [Greydanus (2020)](https://github.com/greydanus/mnist1d) |
-| Supervised | Gaussian blobs | `create_gaussian_task` | MLP classifier (cross-entropy + L2) on Gaussian-cluster data. | — |
-| Meta-learning | Adam hyperparameters | `create_gaussian_meta_task` | Outer objective tunes Adam's `(lr, b1, b2)` for an inner MLP training run. | — |
-| PINN | 1-D PDE | `create_pde_task` | MLP PINN for the `convection`, `reaction`, or `wave` equation (collocation-residual MSE). | — |
-| PINN | Helmholtz | `create_helmholtz_task` | Fourier-feature MLP for the 2-D/3-D Helmholtz equation. | Jnini et al. (2026) |
-| PINN | Stokes | `create_stokes_task` | MLP for lid-driven Stokes flow in a wedge (Moffatt eddies). | Jnini et al. (2026) |
-| PINN | Viscous Burgers | `create_viscous_burgers_task` | MLP for the 2+1-D viscous Burgers equation with closed-form targets. | Jnini et al. (2026) |
-| PINN | Inviscid Burgers | `create_inviscid_burgers_task` | Two-network `MultiNet` with entropy consistency for the shock-forming inviscid Burgers law. | Jnini et al. (2026) |
-| PINN | Euler (Sod) | `create_euler_task` | MLP for the 1-D compressible Euler shock tube; viscous warm-up + inviscid HLLC stages. | Jnini et al. (2026) |
-| PINN | Stiff PK-PD | `create_pkpd_task` | MLP for a stiff pharmacokinetic–pharmacodynamic ODE (paclitaxel). | Jnini et al. (2026) |
+| Category | Task | Factory | `global_min` | Description | Reference |
+|---|---|---|---|---|---|
+| Black-box | BBOB | `create_bbob_task` | analytical | 24 analytic, noiseless black-box functions over `[0, 1]^d`; optional multiplicative Gaussian noise. | [bbob-jax](https://github.com/bessagroup/bbob-jax) |
+| Black-box | CEC 2005 | `create_cec2005_task` | analytical | CEC 2005 real-parameter functions with per-function bounds; `f4/f17/f24/f25` are stochastic. | [bbob-jax](https://github.com/bessagroup/bbob-jax) |
+| Least-squares | Random quadratic | `create_quadratic_task` | analytical | Minimize `\|\|W x - y\|\|^2` for random Gaussian `W`, `y` (square or over-determined). | Maheswaranathan et al. (2019) |
+| Supervised | Two-spiral | `create_spiral_task` | empirical | GRU-RNN trained with MSE to separate two interleaved spirals. | — |
+| Supervised | MNIST-1D | `create_mnist1d_task` | empirical | MLP softmax classifier on the 1-D MNIST surrogate dataset. | [Greydanus (2020)](https://github.com/greydanus/mnist1d) |
+| Supervised | Gaussian blobs | `create_gaussian_task` | empirical | MLP classifier (cross-entropy + L2) on Gaussian-cluster data. | — |
+| Meta-learning | Adam hyperparameters | `create_gaussian_meta_task` | empirical | Outer objective tunes Adam's `(lr, b1, b2)` for an inner MLP training run. | — |
+| PINN | 1-D PDE | `create_pde_task` | 0 (theoretical) | MLP PINN for the `convection`, `reaction`, or `wave` equation (collocation-residual MSE). | — |
+| PINN | Helmholtz | `create_helmholtz_task` | 0 (theoretical) | Fourier-feature MLP for the 2-D/3-D Helmholtz equation. | Jnini et al. (2026) |
+| PINN | Stokes | `create_stokes_task` | 0 (theoretical) | MLP for lid-driven Stokes flow in a wedge (Moffatt eddies). | Jnini et al. (2026) |
+| PINN | Viscous Burgers | `create_viscous_burgers_task` | 0 (theoretical) | MLP for the 2+1-D viscous Burgers equation with closed-form targets. | Jnini et al. (2026) |
+| PINN | Inviscid Burgers | `create_inviscid_burgers_task` | 0 (theoretical) | Two-network `MultiNet` with entropy consistency for the shock-forming inviscid Burgers law. | Jnini et al. (2026) |
+| PINN | Euler (Sod) | `create_euler_task` | 0 (theoretical) | MLP for the 1-D compressible Euler shock tube; viscous warm-up + inviscid HLLC stages. | Jnini et al. (2026) |
+| PINN | Stiff PK-PD | `create_pkpd_task` | 0 (theoretical) | MLP for a stiff pharmacokinetic–pharmacodynamic ODE (paclitaxel). | Jnini et al. (2026) |
+
+Every `Task` records a `global_min` used for regret/gap reporting, set by the mechanism appropriate to the problem:
+
+- **analytical** — retrieved or computed in closed form (the BBOB/CEC 2005 registry optima, the quadratic least-squares residual). A true mathematical lower bound on the noiseless loss.
+- **0 (theoretical)** — the loss is a sum of PDE-residual / boundary / initial-condition mean-squared-error terms, so `0` is the theoretical minimum (attained when the network solves the PDE exactly). A genuine lower bound, though a finite-width network need not reach it.
+- **empirical** — the true minimum is unreachable (overlapping classes forbid perfect separation, or there is no closed form), so the factory runs a short, seeded, multi-restart Adam **benchmark at task-creation time** and records the best loss found (see `estimate_global_min`). This is a best-achievable *estimate*, not a guaranteed lower bound; it is deterministic in the task seed, so it is stable across rebuilds. Pass `estimate_global_min=False` to those factories to skip the benchmark and leave `global_min` unset.
 
 The physics-informed suite reproduces the benchmarks of **Jnini et al. (2026)**, *Curvature-aware optimization for high-accuracy physics-informed neural networks*, [arXiv:2604.05230](https://arxiv.org/abs/2604.05230).
 
 ## Hydra task configurations
 
-For large-scale studies, `l2co-tasks` ships ready-made [Hydra](https://hydra.cc) config groups under `l2co_tasks/conf/tasks/` (installed as package data). Each YAML describes a whole **task distribution** rather than a single task: an [`f3dasm`](https://github.com/bessagroup/f3dasm) sampler and domain (for example the grid over `fn_name × dimensionality × seed`), a `data_generator` pointing at the matching `create_*_task` factory, a feature `schema`, and the optimization bounds. Suites are provided for every family — `bbob`, `bbob_small`, `bbob_holdout`, `cec2005`, `quadratic`, `spirals`, `mnist1d`, `gaussian_classification`, `gaussian_meta`, and one per PINN problem (`helmholtz`, `stokes`, `viscous_burgers`, `inviscid_burgers`, `euler`, `pkpd`, `pde`).
+For large-scale studies, `l2co-tasks` ships ready-made [Hydra](https://hydra.cc) config groups under `l2co_tasks/conf/tasks/` (installed as package data). Each YAML describes a whole **task distribution** rather than a single task: an [`f3dasm`](https://github.com/bessagroup/f3dasm) sampler and domain (for example the grid over `fn_name × dimensionality × seed`), a `data_generator` pointing at the matching `create_*_task` factory, a feature `schema`, and the optimization bounds. Suites are provided for every family — `bbob`, `bbob_small`, `bbob_diverse` (a 7-function subset covering all five BBOB difficulty groups) and its held-out counterpart `bbob_diverse_holdout` (same functions, disjoint seeds), `bbob_holdout`, `cec2005`, `quadratic`, `spirals`, `mnist1d`, `gaussian_classification`, `gaussian_meta`, and one per PINN problem (`helmholtz`, `stokes`, `viscous_burgers`, `inviscid_burgers`, `euler`, `pkpd`, `pde`).
 
 Downstream applications such as [`l2co_experiments`](https://github.com/bessagroup/l2co_experiments) consume these by adding `l2co-tasks` to the Hydra search path and selecting a suite by name:
 

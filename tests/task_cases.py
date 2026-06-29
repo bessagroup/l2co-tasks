@@ -10,7 +10,9 @@ does not itself expose:
   tasks optimised over neural-network weight space / ``R^n``.
 * ``gmin_is_lower_bound`` -- whether ``task.global_min`` is a true
   mathematical lower bound on the loss (BBOB/CEC2005 noiseless,
-  quadratic) as opposed to a literature reference (gaussian) or unknown.
+  quadratic, the PDE-residual ``0`` of the PINN tasks) as opposed to an
+  empirical best-achievable estimate (gaussian, spiral, MNIST-1D, meta)
+  or a noiseless value under added noise.
 
 Adding a new task family = adding one entry here. The companion
 ``test_task_registry_guard.py`` fails if a public ``create_*`` factory
@@ -104,6 +106,12 @@ def _quadratic(n_observations: int | None) -> Callable[[Path], Task]:
     )
 
 
+# The empirical-global_min tasks benchmark their minimum at creation
+# with a multi-restart Adam search; the contract suite only needs a
+# finite, deterministic value, so a tiny budget keeps the build cheap.
+_GMIN_KW = dict(global_min_restarts=2, global_min_steps=10)
+
+
 def _spiral(p: Path) -> Task:
     """Build a tiny spiral RNN task."""
     return create_spiral_task(
@@ -112,6 +120,7 @@ def _spiral(p: Path) -> Task:
         dataset_path=str(p / "spiral"),
         seed=0,
         batch_size=8,
+        **_GMIN_KW,
     )
 
 
@@ -126,6 +135,7 @@ def _gaussian(p: Path) -> Task:
         l2_regularization=0.01,
         hidden_size=2,
         num_layers=2,
+        **_GMIN_KW,
     )
 
 
@@ -139,6 +149,8 @@ def _gaussian_meta(p: Path) -> Task:
         dim_points=2,
         inner_steps=2,
         l2_regularization=0.01,
+        global_min_restarts=2,
+        global_min_steps=5,
     )
 
 
@@ -149,6 +161,7 @@ def _mnist1d(p: Path) -> Task:
         dataset_size=64,
         seed=0,
         batch_size=8,
+        **_GMIN_KW,
     )
 
 
@@ -357,11 +370,14 @@ TASK_CASES: list[TaskCase] = [
         # steps at 1e-2 barely move it within the suite's step budget.
         lr=0.02,
     ),
+    # PDE residual losses are sums of MSE terms, so global_min = 0 is a
+    # genuine lower bound (theoretical minimum).
     TaskCase(
         "pde-convection",
         "create_pde_task",
         _pde("convection"),
         domain="unbounded",
+        gmin_is_lower_bound=True,
         marks=_SLOW,
     ),
     TaskCase(
@@ -369,6 +385,7 @@ TASK_CASES: list[TaskCase] = [
         "create_pde_task",
         _pde("reaction"),
         domain="unbounded",
+        gmin_is_lower_bound=True,
         marks=_SLOW,
     ),
     TaskCase(
@@ -376,6 +393,7 @@ TASK_CASES: list[TaskCase] = [
         "create_pde_task",
         _pde("wave"),
         domain="unbounded",
+        gmin_is_lower_bound=True,
         marks=_SLOW,
     ),
     TaskCase(

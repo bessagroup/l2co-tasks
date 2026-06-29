@@ -28,6 +28,8 @@ def _mnist1d_task(_mnist1d_dataset_path):
         dataset_size=64,
         seed=0,
         batch_size=8,
+        global_min_restarts=2,
+        global_min_steps=10,
     )
 
 

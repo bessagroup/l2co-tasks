@@ -19,6 +19,8 @@ def test_create_gaussian_meta_task_fields(tmp_path):
         dim_points=2,
         inner_steps=2,
         l2_regularization=0.01,
+        global_min_restarts=2,
+        global_min_steps=5,
     )
     assert isinstance(task, Task)
     assert task.name == "gaussian_classification_meta"

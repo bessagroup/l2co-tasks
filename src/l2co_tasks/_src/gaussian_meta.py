@@ -16,6 +16,14 @@ the inner model best.
 Note that the inner MLP is fixed at ``in=2, out=2, width=2, depth=2``;
 ``dim_points`` only shapes the generated dataset, not the inner network.
 
+``global_min`` has no closed form here, so it is set *empirically*: a
+short, seeded multi-restart Adam search over the unit ``(lr, b1, b2)``
+box records the best achievable final inner loss (see
+:func:`l2co_tasks._src.global_min.estimate_global_min`). This benchmark
+is the costliest of the task family -- every outer step runs a full
+inner training loop -- so its default budget is smaller. Pass
+``estimate_global_min=False`` to skip it.
+
 Public API
 ----------
 create_gaussian_meta_task
@@ -24,6 +32,7 @@ create_gaussian_meta_task
     ``l2_regularization``.
 """
 
+import dataclasses
 from functools import partial
 from pathlib import Path
 
@@ -35,6 +44,7 @@ import jax.random as jr
 import optax
 from jaxtyping import PyTree
 
+from .global_min import estimate_global_min as _estimate_global_min
 from .task import Task, dataset_dict
 from .task_gaussian_class import generate_one_gaussian_dataset, save_dataset
 
@@ -74,6 +84,9 @@ def create_gaussian_meta_task(
     dim_points: int,
     inner_steps: int,
     l2_regularization: float,
+    estimate_global_min: bool = True,
+    global_min_restarts: int = 5,
+    global_min_steps: int = 300,
 ) -> Task:
     """Create a meta-learning task for Adam hyperparameter tuning.
 
@@ -97,11 +110,23 @@ def create_gaussian_meta_task(
         Number of inner-loop Adam optimisation steps.
     l2_regularization : float
         L2 penalty weight for the inner-loop loss.
+    estimate_global_min : bool, optional
+        Whether to benchmark ``global_min`` at creation with a short
+        multi-restart Adam search over the unit ``(lr, b1, b2)`` box, by
+        default True. When False, ``global_min`` is left as ``None``.
+    global_min_restarts : int, optional
+        Number of Adam restarts for the ``global_min`` benchmark, by
+        default 5.
+    global_min_steps : int, optional
+        Number of outer Adam steps per restart for the benchmark, by
+        default 300. Each step runs a full inner training loop, so this
+        is the most expensive benchmark in the task family.
 
     Returns
     -------
     Task
-        Configured meta-learning task.
+        Configured meta-learning task. ``global_min`` is an *empirical*
+        best-achievable-loss estimate, not a guaranteed lower bound.
     """
     # Coerce numpy scalars (e.g. produced by the f3dasm random
     # sampler over an int-typed domain) back to Python ints so the
@@ -205,9 +230,25 @@ def create_gaussian_meta_task(
 
         return final_loss
 
-    return Task(
+    task = Task(
         model=outer_model,
         loss_fn=partial(inner_loop, key=model_key, inner_steps=inner_steps),
         dataset=dataset_dict(_path, None),
         tag=tag,
     )
+
+    if estimate_global_min:
+        # The outer parameters live in [0, 1]^3, so clip restarts back
+        # into the box; a slightly larger lr moves the 3-vector
+        # meaningfully within the step budget.
+        gmin = _estimate_global_min(
+            task,
+            clip_to_unit=True,
+            seed=seed,
+            n_restarts=global_min_restarts,
+            n_steps=global_min_steps,
+            lr=0.05,
+        )
+        task = dataclasses.replace(task, global_min=gmin)
+
+    return task

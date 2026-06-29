@@ -15,8 +15,15 @@ cannot pass. Per family:
 Families intentionally not covered here: inviscid Burgers, Euler and
 Stokes have no closed-form solution (their operator helpers are pinned
 in their own test modules); the PK-PD analytic concentration is pinned
-in ``test_pkpd.py``; gaussian-meta and the stochastic BBOB/CEC cases
-have no fixed reference value.
+in ``test_pkpd.py``; the stochastic BBOB/CEC cases have no fixed
+reference value.
+
+The empirical-``global_min`` tasks (gaussian classification, spiral,
+MNIST-1D, gaussian-meta) have no closed-form minimum -- their
+``global_min`` is benchmarked at creation -- so instead of a fixed value
+this suite pins their *determinism*: rebuilding the task reproduces the
+same ``global_min`` (and hence the same ``hash``), which is what keeps a
+benchmarked value safe to put in ``Task`` identity.
 """
 
 from __future__ import annotations
@@ -29,6 +36,7 @@ import jax.random as jr
 import pytest
 
 from ._contract_utils import evaluate_task_loss, fill_model, sample_model
+from .task_cases import CASE_BY_ID
 
 slow = pytest.mark.slow
 
@@ -288,3 +296,30 @@ def test_viscous_burgers_exact_solution_minimizes_loss(build_case):
     task = build_case("viscous-burgers")
     exact = _ViscousBurgersExact(nu=task.loss_fn.keywords["nu"])
     _assert_exact_solution_minimizes(task, exact, atol=1e-4)
+
+
+# ---------------------------------------------------------------------------
+# Empirical global_min: deterministic, finite and positive
+# ---------------------------------------------------------------------------
+
+
+@slow
+@pytest.mark.parametrize(
+    "case_id", ["gaussian-class", "spiral", "mnist1d", "gaussian-meta"]
+)
+def test_empirical_global_min_is_deterministic(case_id, tmp_path):
+    """Rebuilding an empirical task reproduces ``global_min`` exactly.
+
+    The benchmark search that sets ``global_min`` is seeded, so two
+    builds with identical arguments (and the same cached dataset) must
+    yield the same float -- otherwise the value, which feeds
+    ``tag_hashable``, would make the task's ``hash`` unstable.
+    """
+    build = CASE_BY_ID[case_id].build
+    task_a = build(tmp_path)
+    task_b = build(tmp_path)
+    assert task_a.global_min is not None
+    assert jnp.isfinite(task_a.global_min)
+    assert task_a.global_min > 0.0
+    assert task_a.global_min == task_b.global_min
+    assert task_a.hash == task_b.hash

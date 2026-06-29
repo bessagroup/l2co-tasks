@@ -20,6 +20,8 @@ def test_create_spiral_task_builds_dataset_and_task(tmp_path):
         dataset_path=str(ds_base),
         seed=0,
         batch_size=8,
+        global_min_restarts=2,
+        global_min_steps=10,
     )
 
     assert isinstance(task, Task)
@@ -46,6 +48,8 @@ def test_create_spiral_task_loss_runs_on_batch(tmp_path):
         dataset_path=str(tmp_path / "spiral"),
         seed=0,
         batch_size=4,
+        global_min_restarts=2,
+        global_min_steps=10,
     )
     ds = task.loaded_dataset
     loss = float(task.loss_fn(task.model, ds["x"][:4], ds["y"][:4]))
@@ -61,6 +65,8 @@ def test_create_spiral_task_round_trip(tmp_path):
         dataset_path=str(tmp_path / "spiral"),
         seed=0,
         batch_size=4,
+        global_min_restarts=2,
+        global_min_steps=10,
     )
     ds = task.loaded_dataset
     before = float(task.loss_fn(task.model, ds["x"][:4], ds["y"][:4]))

@@ -10,6 +10,12 @@ The single object every factory returns: a serializable bundle of a model, a los
 
 ::: l2co_tasks.DatasetDict
 
+## Estimating the global minimum
+
+Benchmark a task's best achievable loss with a short, seeded, multi-restart Adam search. This is how the supervised-learning and meta factories set their *empirical* `global_min`; it is also a standalone helper for custom tasks.
+
+::: l2co_tasks.estimate_global_min
+
 ## BBOB benchmark functions
 
 ::: l2co_tasks.create_bbob_task

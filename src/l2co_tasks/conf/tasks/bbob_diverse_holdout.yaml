@@ -1,0 +1,59 @@
+# Held-out counterpart of ``bbob_diverse`` for generalization evaluation.
+#
+# Same fn_name / dimensionality as ``bbob_diverse.yaml`` so the task-feature
+# schema (dimensionality, separable, unimodal) learned during training is
+# valid here too -- the FeatureProcessor never sees an unseen categorical
+# level. Only the seed differs: a disjoint range (1..3 vs the training
+# seed 0) draws a *different* BBOB instance of each function, giving a
+# genuine generalization signal across the same landscape diversity.
+#
+#   7 functions x 3 dimensions x 3 seeds = 63 held-out tasks.
+sampler:
+  _target_: f3dasm.create_sampler
+  sampler: "grid"  # one row per (fn_name x dimensionality x seed)
+sampler_kwargs:
+
+experimentdata:
+  domain:
+    input:
+      fn_name:
+        type: category
+        categories:
+        # Group 1 - separable
+          - 'sphere'                  # well-conditioned baseline
+        # Group 2 - low or moderate conditioning
+          - 'rosenbrock'              # curved non-separable valley
+          - 'step_ellipsoid'          # non-smooth plateaus
+        # Group 3 - high conditioning and unimodal
+          - 'bent_cigar'              # extreme ill-conditioning
+        # Group 4 - multimodal with adequate global structure
+          - 'rastrigin'               # regular multimodal, global funnel
+        # Group 5 - multimodal with weak global structure
+          - 'schwefel_xsinx'          # deceptive (optima near bounds)
+          - 'gallagher_101_peaks'     # random multi-peak landscape
+      dimensionality:
+        type: category
+        categories:
+          - 2
+          - 10
+          - 40
+      seed:
+        type: int
+        low: 1      # disjoint from the training seed (0)
+        high: 3
+
+task_kwargs:  # Extra keyword args forwarded to the task factory (null = none)
+
+data_generator:
+  # Factory function that creates a Task object from each ExperimentData row
+  _target_: l2co_tasks.create_bbob_task
+  _partial_: True
+
+schema:
+  # Feature schema used by FeatureProcessor to encode task metadata for the model
+  dimensionality: continuous
+  separable: boolean
+  unimodal: boolean
+
+# [lower, upper] for bounded tasks, omit (or null) for unbounded.
+bounded:

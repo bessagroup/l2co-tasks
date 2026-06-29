@@ -12,6 +12,12 @@ scalar probability per sequence. The loss is mean-squared error
 against the ``{0, 1}`` label. The dataset is generated once, cached to
 ``.npz`` and trained in mini-batches.
 
+``global_min`` is set *empirically*: a short, seeded multi-restart Adam
+benchmark records the best achievable MSE at task-creation time (see
+:func:`l2co_tasks._src.global_min.estimate_global_min`), since a
+finite-width GRU need not drive the MSE to 0. Pass
+``estimate_global_min=False`` to skip the benchmark.
+
 Public API
 ----------
 create_spiral_task
@@ -20,6 +26,7 @@ create_spiral_task
 """
 
 # Local
+import dataclasses
 import math
 from pathlib import Path
 
@@ -28,6 +35,7 @@ import jax.numpy as jnp
 import jax.random as jrd
 
 from ._io import save_dataset
+from .global_min import estimate_global_min as _estimate_global_min
 from .loss_fn import mse_loss_fn
 from .models import rnn
 
@@ -73,6 +81,9 @@ def create_spiral_task(
     dataset_path: str,
     seed: int,
     batch_size: int,
+    estimate_global_min: bool = True,
+    global_min_restarts: int = 3,
+    global_min_steps: int = 1000,
 ) -> Task:
     """Create a spiral binary classification task using an RNN.
 
@@ -88,11 +99,23 @@ def create_spiral_task(
         Random seed for reproducibility.
     batch_size : int
         Mini-batch size for training.
+    estimate_global_min : bool, optional
+        Whether to benchmark ``global_min`` at creation with a short
+        multi-restart Adam search, by default True. When False,
+        ``global_min`` is left as ``None``.
+    global_min_restarts : int, optional
+        Number of Adam restarts for the ``global_min`` benchmark, by
+        default 3.
+    global_min_steps : int, optional
+        Number of Adam steps per restart for the benchmark, by default
+        1000.
 
     Returns
     -------
     Task
-        Configured spiral classification task.
+        Configured spiral classification task. ``global_min`` is an
+        *empirical* best-achievable-loss estimate, not a guaranteed
+        lower bound.
     """
     # Coerce numpy scalars (e.g. produced by the f3dasm random
     # sampler over an int-typed domain) back to Python ints so the
@@ -129,9 +152,20 @@ def create_spiral_task(
 
     tag.update({"loss_fn": "mse"})
 
-    return Task(
+    task = Task(
         model=model,
         loss_fn=loss_fn,
         dataset=dataset_dict(dataset_path, seed, batch_size),
         tag=tag,
     )
+
+    if estimate_global_min:
+        gmin = _estimate_global_min(
+            task,
+            seed=seed,
+            n_restarts=global_min_restarts,
+            n_steps=global_min_steps,
+        )
+        task = dataclasses.replace(task, global_min=gmin)
+
+    return task

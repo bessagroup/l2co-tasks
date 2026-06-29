@@ -10,9 +10,13 @@ classes guaranteed present), giving inputs of shape
 The model is an MLP (input ``dim_points``, output 2, ``relu`` hidden
 activations and a ``softmax`` output) with configurable ``hidden_size``
 and ``num_layers``. The loss is softmax cross-entropy plus an L2 weight
-penalty scaled by ``l2_regularization``. A reference global minimum of
-``0.322`` (from the learned-optimisation literature) is recorded on the
-task.
+penalty scaled by ``l2_regularization``. The true minimum is unreachable
+-- overlapping Gaussian clusters forbid perfect separation -- so
+``global_min`` is set *empirically*: a short, seeded multi-restart Adam
+benchmark records the best achievable loss at task-creation time (see
+:func:`l2co_tasks._src.global_min.estimate_global_min`). Pass
+``estimate_global_min=False`` to skip the benchmark and leave
+``global_min`` as ``None``.
 
 Public API
 ----------
@@ -25,6 +29,7 @@ create_gaussian_task
 """
 
 # Standard
+import dataclasses
 from functools import partial
 from pathlib import Path
 
@@ -35,6 +40,7 @@ import jax.random as jrd
 import jax.random as random
 
 from ._io import save_dataset
+from .global_min import estimate_global_min as _estimate_global_min
 from .loss_fn import mean_categorical_cross_entropy_loss_fn_l2
 from .models import mlp
 
@@ -120,6 +126,9 @@ def create_gaussian_task(
     l2_regularization: float,
     hidden_size: int = 2,
     num_layers: int = 2,
+    estimate_global_min: bool = True,
+    global_min_restarts: int = 3,
+    global_min_steps: int = 1000,
 ) -> Task:
     """
     Create a Gaussian classification task.
@@ -142,10 +151,28 @@ def create_gaussian_task(
         Size of the hidden layers in the MLP, by default 2.
     num_layers : int, optional
         Number of layers in the MLP, by default 2.
+    estimate_global_min : bool, optional
+        Whether to benchmark ``global_min`` at creation with a short
+        multi-restart Adam search, by default True. When False,
+        ``global_min`` is left as ``None``.
+    global_min_restarts : int, optional
+        Number of Adam restarts for the ``global_min`` benchmark, by
+        default 3.
+    global_min_steps : int, optional
+        Number of Adam steps per restart for the benchmark, by default
+        1000.
+
     Returns
     -------
     Task
         The created Gaussian classification task.
+
+    Notes
+    -----
+    The classes overlap, so the loss cannot reach 0; ``global_min`` is
+    therefore an *empirical* estimate of the best achievable loss rather
+    than a guaranteed lower bound (see
+    :func:`l2co_tasks._src.global_min.estimate_global_min`).
     """
 
     tag = {}
@@ -201,16 +228,23 @@ def create_gaussian_task(
     tag["separable"] = False
     tag["unimodal"] = False
 
-    # Taken as target value from L2O paper
-    global_min = 0.322
-
-    return Task(
+    task = Task(
         model=model,
         loss_fn=loss_fn,
         dataset=dataset_dict(_path, seed),
         tag=tag,
-        global_min=global_min,
     )
+
+    if estimate_global_min:
+        gmin = _estimate_global_min(
+            task,
+            seed=seed,
+            n_restarts=global_min_restarts,
+            n_steps=global_min_steps,
+        )
+        task = dataclasses.replace(task, global_min=gmin)
+
+    return task
 
 
 # =============================================================================

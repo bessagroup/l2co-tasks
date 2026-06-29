@@ -450,7 +450,10 @@ def create_pde_task(
     Returns
     -------
     Task
-        The created PDE task.
+        The created PDE task. ``global_min`` is set to ``0.0``: the loss
+        is a sum of collocation-residual / IC / BC mean-squared-error
+        terms, so 0 is the theoretical minimum (attained when the
+        network satisfies the PDE exactly) and a genuine lower bound.
     """
     tag = {}
 
@@ -530,6 +533,7 @@ def create_pde_task(
         loss_fn=loss_fn,
         dataset=dataset_dict(_path, seed),
         tag=tag,
+        global_min=0.0,
     )
 
 
