@@ -32,6 +32,7 @@ from l2co_tasks import (
     Task,
     create_bbob_task,
     create_cec2005_task,
+    create_cec2017_task,
     create_euler_task,
     create_gaussian_meta_task,
     create_gaussian_task,
@@ -96,6 +97,17 @@ def _cec(fn_name: str) -> Callable[[Path], Task]:
     """Return a builder for a small CEC2005 task."""
     return lambda _p: create_cec2005_task(
         fn_name=fn_name, seed=0, dimensionality=3
+    )
+
+
+def _cec2017(fn_name: str, dimensionality: int = 3) -> Callable[[Path], Task]:
+    """Return a builder for a small CEC2017 task.
+
+    Hybrids need one dimension per subcomponent kernel, so their cases
+    pass an explicit ``dimensionality`` at or above ``min_ndim``.
+    """
+    return lambda _p: create_cec2017_task(
+        fn_name=fn_name, seed=0, dimensionality=dimensionality
     )
 
 
@@ -330,6 +342,22 @@ TASK_CASES: list[TaskCase] = [
         _cec("f4"),
         domain="unit",
         gmin_is_lower_bound=False,
+    ),
+    TaskCase(
+        "cec2017-f1",
+        "create_cec2017_task",
+        _cec2017("cec2017_f1"),
+        domain="unit",
+        gmin_is_lower_bound=True,
+    ),
+    # A hybrid: exercises the min_ndim-constrained family (needs >= 5
+    # dimensions; one per subcomponent kernel).
+    TaskCase(
+        "cec2017-f17",
+        "create_cec2017_task",
+        _cec2017("cec2017_f17", dimensionality=5),
+        domain="unit",
+        gmin_is_lower_bound=True,
     ),
     TaskCase(
         "quadratic-square",

@@ -24,6 +24,8 @@ Benchmark a task's best achievable loss with a short, seeded, multi-restart Adam
 
 ::: l2co_tasks.create_cec2005_task
 
+::: l2co_tasks.create_cec2017_task
+
 ## Quadratic least-squares
 
 ::: l2co_tasks.create_quadratic_task

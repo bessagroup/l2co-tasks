@@ -1,18 +1,26 @@
-"""Black-box benchmark optimisation tasks (BBOB and CEC2005).
+"""Black-box benchmark optimisation tasks (BBOB, CEC2005 and CEC2017).
 
 Each task minimises a scalar benchmark objective ``f(x)`` drawn from
 the ``bbob_jax`` registry: the BBOB suite (sphere, Rosenbrock,
-Rastrigin, ...) or the CEC2005 suite. The model is a ``d``-vector
-initialised at the origin and optimised over the normalised domain
-``[0, 1]^d``; the loss rescales it to the function's native bounds via
-``scale_input`` (``[-5, 5]^d`` for BBOB, per-function bounds for
-CEC2005) before evaluating ``f``.
+Rastrigin, ...), the CEC2005 suite or the CEC2017 suite. The model is
+a ``d``-vector initialised at the origin and optimised over the
+normalised domain ``[0, 1]^d``; the loss rescales it to the function's
+native bounds via ``scale_input`` (``[-5, 5]^d`` for BBOB,
+per-function bounds for CEC2005, ``[-100, 100]^d`` for CEC2017)
+before evaluating ``f``.
 
 When ``noise > 0`` the objective is corrupted with multiplicative
 Gaussian noise, ``f(x) * (1 + e)`` with ``e ~ N(0, noise)``, which
 makes the loss stochastic (``pass_rng=True``). The CEC2005 functions
 ``f4``, ``f17``, ``f24`` and ``f25`` are inherently stochastic and so
-always set ``pass_rng=True``, even with ``noise == 0``.
+always set ``pass_rng=True``, even with ``noise == 0``; the CEC2017
+suite has no stochastic functions.
+
+Some CEC2017 functions are only defined from a minimum dimensionality
+upward (the hybrids need one dimension per subcomponent kernel);
+``create_cec2017_task`` propagates ``bbob_jax``'s ``ValueError`` when
+``dimensionality`` is below it and records the bound in
+``tag["min_ndim"]``.
 
 Public API
 ----------
@@ -21,6 +29,9 @@ create_bbob_task
     ``dimensionality`` and optional ``noise``.
 create_cec2005_task
     Same, for a CEC2005 function.
+create_cec2017_task
+    Same, for a CEC2017 function (names ``cec2017_f1``,
+    ``cec2017_f3`` ... ``cec2017_f30``; F2 was officially withdrawn).
 CEC2019Sampler
     ``f3dasm.Block`` that enumerates the CEC-2019 suite, mapping each
     function name to its fixed dimensionality.
@@ -319,6 +330,85 @@ def create_cec2005_task(
     return Task(
         model=model,
         global_min=float(global_min),
+        pass_rng=pass_rng,
+        loss_fn=loss_fn,
+        tag=tag,
+    )
+
+
+def create_cec2017_task(
+    fn_name: str, seed: int, dimensionality: int, noise: float = 0.0
+) -> Task:
+    """
+    Create an optimization task from a CEC2017 benchmark function.
+
+    Parameters
+    ----------
+    fn_name : str
+        Name of the CEC2017 benchmark function (``"cec2017_f1"``,
+        ``"cec2017_f3"`` ... ``"cec2017_f30"``; F2 was officially
+        withdrawn from the suite).
+    seed : int
+        Random seed for function instance generation.
+    dimensionality : int
+        Dimensionality of the optimization problem. Must be at least
+        the function's ``min_ndim`` (the hybrids F11-F20 need one
+        dimension per subcomponent kernel, up to 7; F29/F30 need 5;
+        F6 needs 2).
+    noise : float, optional
+        Multiplicative noise level (standard deviation), by default 0.0.
+
+    Returns
+    -------
+    Task
+        Configured optimization task with scaled and optionally noisy
+        objective function. ``tag`` carries the ``bbob_jax`` function
+        characteristics plus ``min_ndim``.
+
+    Raises
+    ------
+    ValueError
+        If ``dimensionality`` is below the function's ``min_ndim``
+        (raised by the ``bbob_jax`` maker with the exact bound).
+
+    Notes
+    -----
+    Input domain is [0, 1]^d which is scaled to CEC2017's standard
+    [-100, 100]^d range. If noise > 0, the function requires a random
+    key and applies multiplicative Gaussian noise; the suite itself
+    has no stochastic functions.
+    """
+    fn_scale_input = scale_input(
+        domain_bounds=jnp.tile(jnp.array([0.0, 1.0]), (dimensionality, 1)),
+        function_bounds=jnp.tile(
+            jnp.array(bbob_jax.bounds.cec2017_bounds[fn_name]),
+            (dimensionality, 1),
+        ),
+    )
+
+    if noise > 0.0:
+        fn_noise = add_noise(noise_level=noise)
+        pass_rng = True
+    else:
+        fn_noise = lambda f: f
+        pass_rng = False
+
+    # problem() bundles the same instance the registry would build,
+    # plus min_ndim (and raises ValueError below it).
+    problem = bbob_jax.problem(fn_name, ndim=dimensionality, key=jr.key(seed))
+
+    loss_fn = fn_noise(fn_scale_input(problem.fn))
+    model = jnp.zeros(dimensionality)
+    tag = dict(problem.tags)
+    tag["min_ndim"] = problem.min_ndim
+    tag["dimensionality"] = dimensionality
+    tag["fn_name"] = fn_name
+    tag["seed"] = seed
+    tag["noise"] = noise
+
+    return Task(
+        model=model,
+        global_min=float(problem.f_opt),
         pass_rng=pass_rng,
         loss_fn=loss_fn,
         tag=tag,
