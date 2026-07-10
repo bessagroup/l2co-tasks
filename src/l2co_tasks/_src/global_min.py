@@ -15,13 +15,26 @@ of three ways, matching the nature of the problem:
   a short benchmark optimiser* run at task-creation time.
 
 This module implements that empirical arm: :func:`estimate_global_min`
-runs a seeded, fixed-budget, multi-restart Adam search and returns the
-lowest full-batch loss observed. It mirrors the short Adam loop used by
-the optimizability test battery (``tests/test_task_optimizability.py``):
-each restart trains the trainable (inexact-array) leaves of the model on
-the task's full-batch loss, unit-box tasks are clipped back into
-``[0, 1]`` after every step, and a cosine-decayed learning rate anneals
-the search.
+runs a seeded, fixed-budget, multi-restart search and returns the lowest
+full-batch loss observed. Each restart trains the trainable
+(inexact-array) leaves of the model on the task's full-batch loss. Two
+complementary search arms are taken per restart and minimised over:
+
+* a **cosine-annealed Adam** arm (unit-box tasks are clipped back into
+  ``[0, 1]`` after every step) -- this provides *breadth*, and is the
+  only arm on unit-box tasks, where resampled restarts approximate a
+  global search of the low-dimensional box;
+* an **L-BFGS** arm on the unbounded weight-space tasks -- this provides
+  *depth*: a quasi-Newton search to (near-)convergence, which is what
+  makes ``global_min`` an actual lower bound against the stronger
+  optimisers in the downstream portfolio (see ``CONTEXT.md`` and
+  ``docs/adr/0001-global-min-is-a-floor-validated-against-all.md``). It
+  is skipped on unit-box tasks, where its line search fights the
+  projection.
+
+The floor-test battery (``tests/test_global_min_floor.py``) is the oracle
+for whether the resulting value is genuinely a floor; estimator strength
+(restarts / steps, per task) is tuned until that test holds.
 
 The estimate is **deterministic** in ``seed`` -- given the same task and
 budget it always returns the same float. This matters because
@@ -45,6 +58,13 @@ import optax
 from .task import Task
 
 # =============================================================================
+
+# Default L-BFGS depth (steps per restart) when the caller does not set
+# ``lbfgs_steps``. This is a *convergence* budget, independent of the Adam
+# breadth budget ``n_steps``: on these smooth losses L-BFGS settles well
+# within this many steps, so even a small-``n_steps`` build still gets a
+# converged (floor-respecting) L-BFGS estimate.
+_LBFGS_DEFAULT_STEPS = 300
 
 
 def _finite(loss: jax.Array) -> jax.Array:
@@ -98,22 +118,32 @@ def estimate_global_min(
     n_restarts: int = 3,
     n_steps: int = 1000,
     lr: float = 1e-2,
+    use_lbfgs: bool = True,
+    lbfgs_steps: int | None = None,
 ) -> float:
-    """Estimate a task's global minimum with a benchmark optimiser.
+    """Estimate a task's global minimum with benchmark optimisers.
 
-    Runs ``n_restarts`` independent Adam searches over the task's
-    trainable parameters -- each for ``n_steps`` steps on the full-batch
-    loss with a cosine-decayed learning rate -- and returns the lowest
-    loss observed across all restarts and steps. The result is the
-    "empirical" ``global_min`` recorded by the supervised-learning and
-    meta factories.
+    Runs ``n_restarts`` independent searches over the task's trainable
+    parameters and returns the lowest loss observed across all restarts,
+    arms and steps. Each restart takes the minimum of two arms:
+
+    * a cosine-annealed **Adam** arm of ``n_steps`` steps (breadth);
+    * an **L-BFGS** arm of ``lbfgs_steps`` steps (depth) -- only on
+      unbounded weight-space tasks (``clip_to_unit=False``), where it
+      drives the estimate to a genuine lower bound against the stronger
+      portfolio optimisers. It is skipped when ``clip_to_unit=True`` (its
+      line search fights the projection) or when ``use_lbfgs=False``.
+
+    The result is the "empirical" ``global_min`` recorded by the
+    supervised-learning and meta factories.
 
     The first restart starts from ``task.model`` (the factory's
     initialised weights), which is usually a strong starting point; the
     remaining restarts start from resampled leaves for diversity. For
     unit-box tasks (``clip_to_unit=True``) *every* restart is resampled,
     since the factory's initial model sits at the box corner where the
-    projected step can stall.
+    projected step can stall, and resampled restarts approximate a global
+    search of the (low-dimensional) box.
 
     Parameters
     ----------
@@ -124,17 +154,25 @@ def estimate_global_min(
     clip_to_unit : bool, optional
         Project parameters back into ``[0, 1]`` after each step (for
         tasks optimised over the unit box, e.g. the Adam-meta task), by
-        default ``False``.
+        default ``False``. Also disables the L-BFGS arm.
     seed : int, optional
         Seed for restart initialisation and per-step keys; makes the
         estimate deterministic, by default 0.
     n_restarts : int, optional
-        Number of independent Adam restarts, by default 3.
+        Number of independent restarts, by default 3.
     n_steps : int, optional
         Number of Adam steps per restart, by default 1000.
     lr : float, optional
         Initial (peak) learning rate of the cosine-decay schedule, by
         default 1e-2.
+    use_lbfgs : bool, optional
+        Run the L-BFGS depth arm on unbounded tasks, by default ``True``.
+    lbfgs_steps : int or None, optional
+        Number of L-BFGS steps per restart; defaults to
+        ``_LBFGS_DEFAULT_STEPS`` (a convergence budget independent of the
+        Adam breadth budget ``n_steps``) when ``None``. On these smooth
+        losses L-BFGS converges well within that many steps, so even a
+        small-``n_steps`` build still gets a floor-respecting estimate.
 
     Returns
     -------
@@ -143,6 +181,14 @@ def estimate_global_min(
     """
     n_steps = max(int(n_steps), 1)
     n_restarts = max(int(n_restarts), 1)
+    if lbfgs_steps is None:
+        lbfgs_steps = _LBFGS_DEFAULT_STEPS
+    else:
+        lbfgs_steps = max(int(lbfgs_steps), 1)
+    # L-BFGS is a sound *strong* arm only on unbounded weight-space tasks;
+    # on unit-box tasks its line search fights the projection, so breadth
+    # (resampled Adam restarts) sets the floor there instead.
+    run_lbfgs = bool(use_lbfgs) and not clip_to_unit
     # Materialise the dataset once so the loss closure is a clean
     # function of the model alone (no file I/O baked into the trace).
     dataset = {k: jnp.asarray(v) for k, v in task.loaded_dataset.items()}
@@ -184,6 +230,40 @@ def estimate_global_min(
         final = loss_at(params, static, jr.fold_in(restart_key, n_steps))
         return jnp.minimum(best, _finite(final))
 
+    @eqx.filter_jit
+    def run_restart_lbfgs(start, restart_key):
+        """L-BFGS from ``start`` at a fixed key; return the best loss seen.
+
+        The key is fixed for the whole restart (not folded per step) so
+        the loss is deterministic across L-BFGS line-search probes, which
+        ``optax.value_and_grad_from_state`` relies on to reuse cached
+        value/grad.
+        """
+        params, static = eqx.partition(start, eqx.is_inexact_array)
+
+        def f(p):
+            """Scalar loss at trainable params ``p`` (fixed restart key)."""
+            return loss_at(p, static, restart_key)
+
+        l_opt = optax.lbfgs()
+        opt_state = l_opt.init(params)
+        value_and_grad = optax.value_and_grad_from_state(f)
+
+        def body(carry, _):
+            params, opt_state, best = carry
+            val, grad = value_and_grad(params, state=opt_state)
+            updates, opt_state = l_opt.update(
+                grad, opt_state, params, value=val, grad=grad, value_fn=f
+            )
+            params = eqx.apply_updates(params, updates)
+            return (params, opt_state, jnp.minimum(best, _finite(val))), None
+
+        init = (params, opt_state, jnp.asarray(jnp.inf))
+        (params, _, best), _ = jax.lax.scan(
+            body, init, None, length=lbfgs_steps
+        )
+        return jnp.minimum(best, _finite(f(params)))
+
     best_overall = jnp.asarray(jnp.inf)
     for r in range(n_restarts):
         rk = restart_keys[r]
@@ -192,6 +272,10 @@ def estimate_global_min(
         else:
             start = _resample_leaves(task.model, rk, clip_to_unit)
         best_overall = jnp.minimum(best_overall, run_restart(start, rk))
+        if run_lbfgs:
+            best_overall = jnp.minimum(
+                best_overall, run_restart_lbfgs(start, rk)
+            )
     return float(best_overall)
 
 

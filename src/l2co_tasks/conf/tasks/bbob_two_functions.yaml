@@ -1,0 +1,49 @@
+# Two-function BBOB contrast set: a minimal demonstration that the best
+# optimizer is task-dependent. `sphere` (smooth, convex, separable) is
+# solved fastest by gradient descent, while `rastrigin` (highly multimodal,
+# regular global structure) defeats gradient methods and is best handled by
+# a population search. Paired with the `two_functions` optimizer set in
+# l2co_experiments (adam @ lr=1e-2 + sepcmaes), the ERTD profiles cross:
+# adam wins on sphere, sepcmaes wins on rastrigin. Tuned in
+# l2co_experiments/notebooks/two_functions.ipynb.
+#
+# Each function gets its own dimensionality (sphere @ 400-D, rastrigin @
+# 120-D), so the tasks are listed explicitly as `input_data` rows rather
+# than expanded from a domain: the `grid` sampler takes the cross-product
+# of `fn_name x dimensionality`, which cannot pin a different dimension per
+# function. The rows are consumed verbatim, so the sampler below is a no-op
+# (`random` at `n_samples: 0` appends nothing).
+#
+#   2 explicit rows = 2 tasks.
+sampler:
+  _target_: f3dasm.create_sampler
+  sampler: "random"  # identity: n_samples=0 appends no rows
+sampler_kwargs:
+  n_samples: 0
+
+experimentdata:
+  # One row per task. `dimensionality` is per-function here (not a shared
+  # category), which is the whole point of this contrast set.
+  input_data:
+    - fn_name: 'sphere'      # smooth & convex -> gradient descent (adam) excels
+      dimensionality: 400
+      seed: 0
+    - fn_name: 'rastrigin'   # multimodal -> population search (sepcmaes) excels
+      dimensionality: 120
+      seed: 0
+
+task_kwargs:  # Extra keyword args forwarded to the task factory (null = none)
+
+data_generator:
+  # Factory function that creates a Task object from each ExperimentData row
+  _target_: l2co_tasks.create_bbob_task
+  _partial_: True
+
+schema:
+  # Feature schema used by FeatureProcessor to encode task metadata for the model
+  dimensionality: continuous
+  separable: boolean
+  unimodal: boolean
+
+# [lower, upper] for bounded tasks, omit (or null) for unbounded.
+bounded:

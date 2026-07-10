@@ -299,7 +299,7 @@ def test_viscous_burgers_exact_solution_minimizes_loss(build_case):
 
 
 # ---------------------------------------------------------------------------
-# Empirical global_min: deterministic, finite and positive
+# Empirical global_min: deterministic, finite and non-negative
 # ---------------------------------------------------------------------------
 
 
@@ -314,12 +314,17 @@ def test_empirical_global_min_is_deterministic(case_id, tmp_path):
     builds with identical arguments (and the same cached dataset) must
     yield the same float -- otherwise the value, which feeds
     ``tag_hashable``, would make the task's ``hash`` unstable.
+
+    ``global_min`` must be non-negative (these are MSE / cross-entropy
+    losses) but may be ``0``: the strengthened estimator's L-BFGS arm
+    drives an over-parametrised tiny build (e.g. the MNIST-1D case, 1098
+    parameters over 64 samples) to a perfect fit, a legitimate floor.
     """
     build = CASE_BY_ID[case_id].build
     task_a = build(tmp_path)
     task_b = build(tmp_path)
     assert task_a.global_min is not None
     assert jnp.isfinite(task_a.global_min)
-    assert task_a.global_min > 0.0
+    assert task_a.global_min >= 0.0
     assert task_a.global_min == task_b.global_min
     assert task_a.hash == task_b.hash

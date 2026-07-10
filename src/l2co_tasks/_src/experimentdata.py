@@ -11,7 +11,7 @@ from pathlib import Path
 from f3dasm import Block, ExperimentData, datagenerator
 from f3dasm.design import Domain
 from hydra.utils import instantiate
-from omegaconf import DictConfig
+from omegaconf import DictConfig, ListConfig, OmegaConf
 
 # Local
 from .task import Task
@@ -79,7 +79,12 @@ def create_tasks_experimentdata(
 
     1. Instantiate the initial ExperimentData from
        ``config.experimentdata`` (defines the task hyperparameter
-       domain and any seed rows).
+       domain and any seed rows). Either give a ``domain`` for the
+       sampler to expand, or an inline ``input_data`` list of per-task
+       rows (materialised from OmegaConf to native containers here)
+       paired with a no-op sampler — the latter pins a distinct
+       hyperparameter set per task, which the cross-product ``grid``
+       sampler cannot express.
     2. Set its project directory to ``project_dir`` so that task
        files are written under ``project_dir/experiment_data/task/``.
     3. Expand the seed rows by calling the sampler Block defined by
@@ -96,7 +101,9 @@ def create_tasks_experimentdata(
 
         ``experimentdata`` : DictConfig
             ``f3dasm.ExperimentData.from_yaml`` spec for the initial
-            task ExperimentData.
+            task ExperimentData. If it carries an inline ``input_data``
+            list, those rows are used verbatim (and an identity sampler
+            should be configured) instead of a sampler-expanded domain.
         ``sampler`` : DictConfig
             ``f3dasm.Block.from_yaml`` init spec for the sampler that
             expands the hyperparameter grid.
@@ -120,7 +127,22 @@ def create_tasks_experimentdata(
         The populated ExperimentData. Not yet stored to disk; call
         ``.store()`` on the result if persistence is required.
     """
-    experiment_data = ExperimentData.from_yaml(config.experimentdata)
+    ed_config = config.experimentdata
+    if isinstance(ed_config.get("input_data"), ListConfig):
+        # Inline per-task rows (a list of mappings) let a config pin a
+        # different hyperparameter set per task — e.g. a 400-D sphere
+        # alongside a 120-D rastrigin, which the cross-product ``grid``
+        # sampler cannot express. ``ExperimentData.from_yaml`` forwards the
+        # value straight to ``ExperimentData(**config)``, but its
+        # ``input_data`` factory only accepts a plain ``list[dict]`` (not
+        # OmegaConf's ``ListConfig``/``DictConfig``), so materialise the
+        # whole spec to native containers first. Pair with a no-op sampler
+        # (``random`` at ``n_samples: 0``) so the rows pass through verbatim.
+        experiment_data = ExperimentData(
+            **OmegaConf.to_container(ed_config, resolve=True)
+        )
+    else:
+        experiment_data = ExperimentData.from_yaml(ed_config)
     experiment_data = experiment_data.set_project_dir(project_dir)
     experiment_data.domain.add_output(
         name="task",

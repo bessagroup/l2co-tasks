@@ -69,6 +69,20 @@ Every family exposes a top-level `create_<name>_task(...)` factory that builds a
 - `pyproject.toml` is auto-sorted by `toml-sort` via pre-commit — editing it manually then committing will trigger a reformat.
 - GitHub workflows in `.github/workflows/` are currently fully commented out; CI is effectively not running. Don't assume pushes are gated by tests.
 
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in **GitHub Issues** for `bessagroup/l2co-tasks` via the `gh` CLI; external PRs are **not** a triage surface. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary — `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. Only `wontfix` exists today; the other four are created on first triage. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+**Single-context** — `CONTEXT.md` + `docs/adr/` at the repo root (created lazily by `/domain-modeling`; absent today). See `docs/agents/domain.md`.
+
 ## Related repositories
 
 Part of the L2CO ecosystem (Bessa Research Group). These repositories work together:
