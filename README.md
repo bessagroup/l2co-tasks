@@ -64,6 +64,7 @@ Every task is built by a `create_<name>_task(...)` factory and returned as a sin
 |---|---|---|---|---|---|
 | Black-box | BBOB | `create_bbob_task` | analytical | 24 analytic, noiseless black-box functions over `[0, 1]^d`; optional multiplicative Gaussian noise. | [bbob-jax](https://github.com/bessagroup/bbob-jax) |
 | Black-box | CEC 2005 | `create_cec2005_task` | analytical | CEC 2005 real-parameter functions with per-function bounds; `f4/f17/f24/f25` are stochastic. | [bbob-jax](https://github.com/bessagroup/bbob-jax) |
+| Black-box | CEC 2017 | `create_cec2017_task` | analytical | CEC 2017 bound-constrained functions (`cec2017_f1`, `cec2017_f3` ... `cec2017_f30`); hybrids need a minimum dimensionality (`tag["min_ndim"]`). | [bbob-jax](https://github.com/bessagroup/bbob-jax) |
 | Least-squares | Random quadratic | `create_quadratic_task` | analytical | Minimize `\|\|W x - y\|\|^2` for random Gaussian `W`, `y` (square or over-determined). | Maheswaranathan et al. (2019) |
 | Supervised | Two-spiral | `create_spiral_task` | empirical | GRU-RNN trained with MSE to separate two interleaved spirals. | — |
 | Supervised | MNIST-1D | `create_mnist1d_task` | empirical | MLP softmax classifier on the 1-D MNIST surrogate dataset. | [Greydanus (2020)](https://github.com/greydanus/mnist1d) |

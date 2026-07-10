@@ -10,7 +10,11 @@ Re-exports the ``create_*`` factory functions for ergonomic access, e.g.::
 # =============================================================================
 
 # Local
-from ._src.benchmark_task import create_bbob_task, create_cec2005_task
+from ._src.benchmark_task import (
+    create_bbob_task,
+    create_cec2005_task,
+    create_cec2017_task,
+)
 from ._src.euler import create_euler_task
 from ._src.gaussian_meta import create_gaussian_meta_task
 from ._src.helmholtz import create_helmholtz_task
@@ -34,6 +38,7 @@ __status__ = "Stable"
 __all__ = [
     "create_bbob_task",
     "create_cec2005_task",
+    "create_cec2017_task",
     "create_euler_task",
     "create_gaussian_meta_task",
     "create_gaussian_task",

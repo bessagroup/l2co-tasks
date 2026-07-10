@@ -56,7 +56,12 @@ slow = pytest.mark.slow
 # Empirical: global_min is a benchmarked estimate -> the at-risk class.
 EMPIRICAL_IDS = ["gaussian-class", "spiral", "mnist1d", "gaussian-meta"]
 # Analytical sample: true closed-form bound; scale_input-bug tripwire.
-ANALYTICAL_SAMPLE_IDS = ["bbob-sphere", "bbob-rastrigin", "cec2005-f1"]
+ANALYTICAL_SAMPLE_IDS = [
+    "bbob-sphere",
+    "bbob-rastrigin",
+    "cec2005-f1",
+    "cec2017-f1",
+]
 # Theoretical sample: residual-MSE >= 0, so global_min = 0 is unbreakable.
 THEORETICAL_SAMPLE_IDS = ["pde-convection", "helmholtz-2d", "viscous-burgers"]
 

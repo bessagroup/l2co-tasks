@@ -1,4 +1,5 @@
-"""Tests for ``create_bbob_task``, ``create_cec2005_task``, ``CEC2019Sampler``.
+"""Tests for ``create_bbob_task``, ``create_cec2005_task``,
+``create_cec2017_task`` and ``CEC2019Sampler``.
 
 These factories are pure (no dataset files) so the tests run quickly and
 do not need the ``slow`` marker.
@@ -18,6 +19,7 @@ from l2co_tasks import (
     Task,
     create_bbob_task,
     create_cec2005_task,
+    create_cec2017_task,
 )
 
 
@@ -79,6 +81,59 @@ def test_create_cec2005_task(fn_name):
         assert task.pass_rng is True
     else:
         assert task.pass_rng is False
+
+
+@pytest.mark.parametrize(
+    "fn_name,dimensionality",
+    [
+        ("cec2017_f1", 2),  # unimodal simple function
+        ("cec2017_f9", 5),  # Levy: argmin displaced from the shift
+        ("cec2017_f17", 5),  # hybrid at its min_ndim
+        ("cec2017_f21", 3),  # composition
+    ],
+)
+def test_create_cec2017_task(fn_name, dimensionality, eqx_path):
+    """CEC2017 tasks build, evaluate, and round-trip; the suite has no
+    inherently stochastic functions so ``pass_rng`` is False without
+    added noise."""
+    task = create_cec2017_task(
+        fn_name=fn_name, seed=0, dimensionality=dimensionality, noise=0.0
+    )
+    assert isinstance(task, Task)
+    assert task.dimensionality == dimensionality
+    assert task.pass_rng is False
+    assert task.tag["fn_name"] == fn_name
+    assert task.tag["min_ndim"] >= 1
+    assert "hybrid" in task.tag  # cec2017 tag schema
+
+    loss = float(task.loss_fn(task.model))
+    assert jnp.isfinite(loss)
+    assert loss >= task.global_min
+
+    saved = Task.save(task, str(eqx_path))
+    loaded = Task.load(saved)
+    assert loaded == task
+    assert float(loaded.loss_fn(loaded.model)) == pytest.approx(loss)
+
+
+def test_create_cec2017_task_noise_flips_pass_rng():
+    """``noise > 0`` flips ``pass_rng=True`` and the loss consumes a
+    key (the suite itself has no stochastic functions)."""
+    task = create_cec2017_task(
+        fn_name="cec2017_f1", seed=0, dimensionality=3, noise=0.1
+    )
+    assert task.pass_rng is True
+    l1 = float(task.loss_fn(jnp.ones(3) * 0.2, jr.key(0)))
+    l2 = float(task.loss_fn(jnp.ones(3) * 0.2, jr.key(1)))
+    assert jnp.isfinite(l1) and jnp.isfinite(l2)
+    assert l1 != l2
+
+
+def test_create_cec2017_task_below_min_ndim_raises():
+    """Hybrids need one dimension per subcomponent kernel; the
+    bbob_jax maker's ValueError propagates with the exact bound."""
+    with pytest.raises(ValueError, match="ndim >= 7"):
+        create_cec2017_task(fn_name="cec2017_f20", seed=0, dimensionality=3)
 
 
 @pytest.mark.requires_f3dasm

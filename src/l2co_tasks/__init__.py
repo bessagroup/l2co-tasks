@@ -10,6 +10,7 @@ from ._src.benchmark_task import (
     CEC2019Sampler,
     create_bbob_task,
     create_cec2005_task,
+    create_cec2017_task,
 )
 from ._src.continue_from_path import retrieve_tasks
 from ._src.euler import EulerTaskSampler, create_euler_task
@@ -55,6 +56,7 @@ __all__ = [
     "ViscousBurgersTaskSampler",
     "create_bbob_task",
     "create_cec2005_task",
+    "create_cec2017_task",
     "create_euler_task",
     "create_gaussian_meta_task",
     "create_gaussian_task",
