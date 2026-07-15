@@ -135,10 +135,20 @@ def compute_embedded_loss(
     Array
         Scalar loss value.
     """
-    residual = model - x_star
-    coefficients = basis @ residual
+    # Compute the embedded coefficients as ``basis @ model - basis @
+    # x_star`` rather than ``basis @ (model - x_star)``. The two are
+    # algebraically identical (up to float rounding), but when this loss
+    # is vmapped over a large candidate batch the second form materialises
+    # the batched ``model - x_star`` as a full ``(n_candidates,
+    # ambient_dim)`` array, whereas the first keeps the batched op a pure
+    # ``(intrinsic, ambient) @ (batch, ambient)`` matmul with an
+    # ``(batch, intrinsic)`` result. ``basis @ x_star`` is a closed-over
+    # constant and folds away. Only the ``bulk_scale`` penalty genuinely
+    # needs the ambient-space residual, so it is built lazily there.
+    coefficients = basis @ model - basis @ x_star
     value = fn(z_opt + scale * coefficients)
     if bulk_scale > 0.0:
+        residual = model - x_star
         perp = residual - basis.T @ coefficients
         value = value + 0.5 * bulk_scale * jnp.sum(perp**2)
     return value
