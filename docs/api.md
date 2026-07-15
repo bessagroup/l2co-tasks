@@ -20,6 +20,15 @@ Benchmark a task's best achievable loss with a short, seeded, multi-restart Adam
 
 ::: l2co_tasks.create_bbob_task
 
+## BBOB-noisy benchmark functions
+
+The inherently stochastic BBOB-noisy suite (f101–f130): eight base
+landscapes disturbed by the Gaussian, uniform or Cauchy noise model at
+moderate or severe severity. Every loss takes a random key
+(`pass_rng=True`). Requires a `bbob-jax` release newer than 1.8.0.
+
+::: l2co_tasks.create_bbob_noisy_task
+
 ## Embedded BBOB benchmark functions
 
 BBOB functions composed with a random low-rank affine embedding: an

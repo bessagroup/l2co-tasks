@@ -63,6 +63,7 @@ Every task is built by a `create_<name>_task(...)` factory and returned as a sin
 | Category | Task | Factory | Description | Reference |
 |---|---|---|---|---|
 | Black-box | BBOB | `create_bbob_task` | 24 analytic, noiseless black-box functions over `[0, 1]^d`; optional multiplicative Gaussian noise. | [bbob-jax](https://github.com/bessagroup/bbob-jax) |
+| Black-box | BBOB-noisy | `create_bbob_noisy_task` | 30 inherently stochastic functions (`bbob_noisy_f101` ... `bbob_noisy_f130`): Gaussian/uniform/Cauchy noise at moderate or severe severity; needs bbob-jax > 1.8.0. | [bbob-jax](https://github.com/bessagroup/bbob-jax) |
 | Black-box | CEC 2005 | `create_cec2005_task` | CEC 2005 real-parameter functions with per-function bounds; `f4/f17/f24/f25` are stochastic. | [bbob-jax](https://github.com/bessagroup/bbob-jax) |
 | Black-box | CEC 2017 | `create_cec2017_task` | CEC 2017 bound-constrained functions (`cec2017_f1`, `cec2017_f3` ... `cec2017_f30`); hybrids need a minimum dimensionality (`tag["min_ndim"]`). | [bbob-jax](https://github.com/bessagroup/bbob-jax) |
 | Black-box | Embedded BBOB | `create_embedded_bbob_task` | BBOB function hidden in a higher-dimensional space via a random orthonormal embedding; rank-`d` Hessian outliers plus a flat or `bulk_scale`-curved null space, mimicking neural-network loss landscapes. | Li et al. (2018), Wang et al. (2016) |

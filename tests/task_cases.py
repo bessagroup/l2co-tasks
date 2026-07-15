@@ -26,10 +26,12 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import bbob_jax
 import pytest
 
 from l2co_tasks import (
     Task,
+    create_bbob_noisy_task,
     create_bbob_task,
     create_cec2005_task,
     create_cec2017_task,
@@ -109,6 +111,13 @@ def _cec2017(fn_name: str, dimensionality: int = 3) -> Callable[[Path], Task]:
     """
     return lambda _p: create_cec2017_task(
         fn_name=fn_name, seed=0, dimensionality=dimensionality
+    )
+
+
+def _bbob_noisy(fn_name: str) -> Callable[[Path], Task]:
+    """Return a builder for a small BBOB-noisy task."""
+    return lambda _p: create_bbob_noisy_task(
+        fn_name=fn_name, seed=0, dimensionality=3
     )
 
 
@@ -317,6 +326,15 @@ def _stokes(p: Path) -> Task:
 
 _SLOW = (pytest.mark.slow,)
 
+# The BBOB-noisy suite ships with bbob-jax releases newer than 1.8.0;
+# on older installs its cases skip instead of failing the battery.
+_NEEDS_BBOB_NOISY = (
+    pytest.mark.skipif(
+        not hasattr(bbob_jax, "bbob_noisy_registry"),
+        reason="installed bbob-jax predates the BBOB-noisy suite",
+    ),
+)
+
 
 TASK_CASES: list[TaskCase] = [
     # Analytical, cheap, deterministic -- the strongest correctness checks.
@@ -341,6 +359,25 @@ TASK_CASES: list[TaskCase] = [
         _bbob("sphere", noise=0.1),
         domain="unit",
         gmin_is_lower_bound=False,
+    ),
+    # BBOB-noisy is inherently stochastic (pass_rng=True, no lower-bound
+    # guarantee): f101 = moderate Gaussian noise on a separable unimodal
+    # base, f124 = severe Cauchy noise on a multimodal base.
+    TaskCase(
+        "bbob-noisy-f101",
+        "create_bbob_noisy_task",
+        _bbob_noisy("bbob_noisy_f101"),
+        domain="unit",
+        gmin_is_lower_bound=False,
+        marks=_NEEDS_BBOB_NOISY,
+    ),
+    TaskCase(
+        "bbob-noisy-f124",
+        "create_bbob_noisy_task",
+        _bbob_noisy("bbob_noisy_f124"),
+        domain="unit",
+        gmin_is_lower_bound=False,
+        marks=_NEEDS_BBOB_NOISY,
     ),
     TaskCase(
         "cec2005-f1",

@@ -1,12 +1,14 @@
-"""Tests for ``create_bbob_task``, ``create_cec2005_task``,
-``create_cec2017_task`` and ``CEC2019Sampler``.
+"""Tests for ``create_bbob_task``, ``create_bbob_noisy_task``,
+``create_cec2005_task``, ``create_cec2017_task`` and ``CEC2019Sampler``.
 
 These factories are pure (no dataset files) so the tests run quickly and
-do not need the ``slow`` marker.
+do not need the ``slow`` marker. The BBOB-noisy tests skip on bbob-jax
+installs that predate the suite (releases up to 1.8.0).
 """
 
 from __future__ import annotations
 
+import bbob_jax
 import jax.numpy as jnp
 import jax.random as jr
 import pandas as pd
@@ -17,9 +19,16 @@ from f3dasm.design import Domain
 from l2co_tasks import (
     CEC2019Sampler,
     Task,
+    create_bbob_noisy_task,
     create_bbob_task,
     create_cec2005_task,
     create_cec2017_task,
+)
+
+_HAS_BBOB_NOISY = hasattr(bbob_jax, "bbob_noisy_registry")
+needs_bbob_noisy = pytest.mark.skipif(
+    not _HAS_BBOB_NOISY,
+    reason="installed bbob-jax predates the BBOB-noisy suite",
 )
 
 
@@ -65,6 +74,56 @@ def test_create_bbob_task_with_noise_requires_key():
     l3 = float(task.loss_fn(jnp.ones(3) * 0.2, jr.key(0)))
     l4 = float(task.loss_fn(jnp.ones(3) * 0.2, jr.key(1)))
     assert l3 != l4
+
+
+@needs_bbob_noisy
+@pytest.mark.parametrize("fn_name", ["bbob_noisy_f101", "bbob_noisy_f124"])
+def test_create_bbob_noisy_task(fn_name, eqx_path):
+    """BBOB-noisy tasks are inherently stochastic: ``pass_rng=True``,
+    per-key deterministic, key-sensitive away from the optimum, and
+    round-trip through save/load."""
+    task = create_bbob_noisy_task(fn_name=fn_name, seed=0, dimensionality=3)
+    assert isinstance(task, Task)
+    assert task.dimensionality == 3
+    assert task.pass_rng is True
+    assert task.tag["fn_name"] == fn_name
+    assert task.tag["seed"] == 0
+    assert task.tag["dimensionality"] == 3
+    assert task.tag["noise"] is True  # suite characteristic flag
+
+    x = jnp.ones(3) * 0.2
+    l1 = float(task.loss_fn(x, key=jr.key(0)))
+    l2 = float(task.loss_fn(x, key=jr.key(0)))
+    assert jnp.isfinite(l1)
+    assert l1 == l2  # same key -> identical
+    # The Cauchy noise model only fires with probability p per draw, so
+    # two individual keys may coincide; across a batch of keys the loss
+    # must still vary.
+    losses = jnp.stack([task.loss_fn(x, key=jr.key(i)) for i in range(16)])
+    assert jnp.all(jnp.isfinite(losses))
+    assert jnp.unique(losses).size > 1
+
+    saved = Task.save(task, str(eqx_path))
+    loaded = Task.load(saved)
+    assert loaded == task
+    assert float(loaded.loss_fn(x, key=jr.key(0))) == pytest.approx(l1)
+
+
+@needs_bbob_noisy
+def test_create_bbob_noisy_task_unknown_name_raises():
+    """Noiseless-suite names are not in the noisy registry."""
+    with pytest.raises(KeyError):
+        create_bbob_noisy_task(fn_name="sphere", seed=0, dimensionality=3)
+
+
+def test_create_bbob_noisy_task_old_bbob_jax_raises(monkeypatch):
+    """Without the noisy registry the factory fails with a clear
+    upgrade message instead of an AttributeError."""
+    monkeypatch.delattr(bbob_jax, "bbob_noisy_registry", raising=False)
+    with pytest.raises(ImportError, match="bbob-jax"):
+        create_bbob_noisy_task(
+            fn_name="bbob_noisy_f101", seed=0, dimensionality=3
+        )
 
 
 @pytest.mark.parametrize("fn_name", ["f1", "f4"])

@@ -11,6 +11,7 @@ Re-exports the ``create_*`` factory functions for ergonomic access, e.g.::
 
 # Local
 from ._src.benchmark_task import (
+    create_bbob_noisy_task,
     create_bbob_task,
     create_cec2005_task,
     create_cec2017_task,
@@ -37,6 +38,7 @@ __status__ = "Stable"
 # =============================================================================
 
 __all__ = [
+    "create_bbob_noisy_task",
     "create_bbob_task",
     "create_cec2005_task",
     "create_cec2017_task",
