@@ -1,0 +1,83 @@
+# Full BBOB-noisy suite (create_bbob_noisy_task): 30 inherently
+# stochastic functions × 6 dimensions × 1 seed = 180 tasks. Eight base
+# landscapes disturbed by the Gaussian, uniform or Cauchy noise model
+# at moderate (f101-f106) or severe (f107-f130) severity; every loss
+# takes a random key (pass_rng=True).
+# Requires a bbob-jax release newer than 1.8.0 (BBOB-noisy suite).
+sampler:
+  _target_: f3dasm.create_sampler
+  sampler: "grid"  # Create one row per (fn_name × dimensionality × seed) combination
+sampler_kwargs:    # Extra keyword args forwarded to the sampler call (null = none)
+
+experimentdata:
+  domain:
+    input:
+      fn_name:
+        type: category
+        categories:
+          # Moderate noise (f101-f106)
+          - 'bbob_noisy_f101'
+          - 'bbob_noisy_f102'
+          - 'bbob_noisy_f103'
+          - 'bbob_noisy_f104'
+          - 'bbob_noisy_f105'
+          - 'bbob_noisy_f106'
+          # Severe noise (f107-f130)
+          - 'bbob_noisy_f107'
+          - 'bbob_noisy_f108'
+          - 'bbob_noisy_f109'
+          - 'bbob_noisy_f110'
+          - 'bbob_noisy_f111'
+          - 'bbob_noisy_f112'
+          - 'bbob_noisy_f113'
+          - 'bbob_noisy_f114'
+          - 'bbob_noisy_f115'
+          - 'bbob_noisy_f116'
+          - 'bbob_noisy_f117'
+          - 'bbob_noisy_f118'
+          - 'bbob_noisy_f119'
+          - 'bbob_noisy_f120'
+          - 'bbob_noisy_f121'
+          - 'bbob_noisy_f122'
+          - 'bbob_noisy_f123'
+          - 'bbob_noisy_f124'
+          - 'bbob_noisy_f125'
+          - 'bbob_noisy_f126'
+          - 'bbob_noisy_f127'
+          - 'bbob_noisy_f128'
+          - 'bbob_noisy_f129'
+          - 'bbob_noisy_f130'
+      dimensionality:
+        type: category
+        categories:
+          - 2
+          - 3
+          - 5
+          - 10
+          - 20
+          - 40
+      seed:
+        type: int
+        low: 0
+        high: 0
+
+task_kwargs:  # Extra keyword args forwarded to the task factory (null = none)
+
+data_generator:
+  # Factory function that creates a Task object from each ExperimentData row
+  _target_: l2co_tasks.create_bbob_noisy_task
+  _partial_: True
+
+schema:
+  # Same feature schema as bbob.yaml so noisy tasks are drop-in
+  # compatible with models trained on the deterministic suite. The
+  # separable/unimodal flags describe the undisturbed base function;
+  # the noise-model tags (gaussian_noise, uniform_noise, cauchy_noise,
+  # severe, noise) stay in the task tags without becoming policy
+  # features.
+  dimensionality: continuous
+  separable: boolean
+  unimodal: boolean
+
+# [lower, upper] for bounded tasks, omit (or null) for unbounded.
+bounded:

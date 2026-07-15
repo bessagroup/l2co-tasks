@@ -21,10 +21,16 @@ from __future__ import annotations
 from importlib import resources
 from pathlib import Path
 
+import bbob_jax
 import pytest
 from omegaconf import DictConfig, OmegaConf
 
 from l2co_tasks import Task, create_tasks_experimentdata
+
+# Configs whose data generator needs the BBOB-noisy suite, which ships
+# with bbob-jax releases newer than 1.8.0; on older installs they skip.
+_NEEDS_BBOB_NOISY = {"bbob_noisy"}
+_HAS_BBOB_NOISY = hasattr(bbob_jax, "bbob_noisy_registry")
 
 # OmegaConf overlays merged on top of each raw YAML before sampling.
 # Goals:
@@ -85,6 +91,19 @@ _OVERLAYS: dict[str, dict] = {
                     },
                     "intrinsic_dim": {"type": "category", "categories": [2]},
                     "ambient_dim": {"type": "category", "categories": [8]},
+                }
+            }
+        },
+    },
+    "bbob_noisy": {
+        "experimentdata": {
+            "domain": {
+                "input": {
+                    "fn_name": {
+                        "type": "category",
+                        "categories": ["bbob_noisy_f101", "bbob_noisy_f124"],
+                    },
+                    "dimensionality": {"type": "category", "categories": [2]},
                 }
             }
         },
@@ -308,6 +327,8 @@ def test_sample_task_distribution(
     """
     if config_name in _SLOW:
         request.applymarker(pytest.mark.slow)
+    if config_name in _NEEDS_BBOB_NOISY and not _HAS_BBOB_NOISY:
+        pytest.skip("installed bbob-jax predates the BBOB-noisy suite")
 
     # mnist1d, spirals, gaussian_classification ship relative
     # ``task_kwargs.dataset_path`` strings; PDETaskSampler likewise

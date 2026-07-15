@@ -1,20 +1,23 @@
-"""Black-box benchmark optimisation tasks (BBOB, CEC2005 and CEC2017).
+"""Black-box benchmark optimisation tasks (BBOB, BBOB-noisy, CEC2005
+and CEC2017).
 
 Each task minimises a scalar benchmark objective ``f(x)`` drawn from
 the ``bbob_jax`` registry: the BBOB suite (sphere, Rosenbrock,
-Rastrigin, ...), the CEC2005 suite or the CEC2017 suite. The model is
-a ``d``-vector initialised at the origin and optimised over the
-normalised domain ``[0, 1]^d``; the loss rescales it to the function's
-native bounds via ``scale_input`` (``[-5, 5]^d`` for BBOB,
-per-function bounds for CEC2005, ``[-100, 100]^d`` for CEC2017)
-before evaluating ``f``.
+Rastrigin, ...), the BBOB-noisy suite (f101-f130), the CEC2005 suite
+or the CEC2017 suite. The model is a ``d``-vector initialised at the
+origin and optimised over the normalised domain ``[0, 1]^d``; the
+loss rescales it to the function's native bounds via ``scale_input``
+(``[-5, 5]^d`` for BBOB and BBOB-noisy, per-function bounds for
+CEC2005, ``[-100, 100]^d`` for CEC2017) before evaluating ``f``.
 
 When ``noise > 0`` the objective is corrupted with multiplicative
 Gaussian noise, ``f(x) * (1 + e)`` with ``e ~ N(0, noise)``, which
 makes the loss stochastic (``pass_rng=True``). The CEC2005 functions
 ``f4``, ``f17``, ``f24`` and ``f25`` are inherently stochastic and so
 always set ``pass_rng=True``, even with ``noise == 0``; the CEC2017
-suite has no stochastic functions.
+suite has no stochastic functions. The BBOB-noisy suite is inherently
+stochastic throughout (its factory has no extra ``noise`` knob and
+requires a bbob-jax newer than 1.8.0).
 
 Some CEC2017 functions are only defined from a minimum dimensionality
 upward (the hybrids need one dimension per subcomponent kernel);
@@ -27,6 +30,9 @@ Public API
 create_bbob_task
     Build a BBOB :class:`Task` from ``fn_name``, ``seed``,
     ``dimensionality`` and optional ``noise``.
+create_bbob_noisy_task
+    Same, for the inherently stochastic BBOB-noisy suite (names
+    ``bbob_noisy_f101`` ... ``bbob_noisy_f130``; no ``noise`` knob).
 create_cec2005_task
     Same, for a CEC2005 function.
 create_cec2017_task
@@ -261,6 +267,86 @@ def create_bbob_task(
         model=model,
         global_min=float(global_min),
         pass_rng=pass_rng,
+        loss_fn=loss_fn,
+        tag=tag,
+    )
+
+
+def create_bbob_noisy_task(
+    fn_name: str, seed: int, dimensionality: int
+) -> Task:
+    """
+    Create an optimization task from a BBOB-noisy benchmark function.
+
+    The BBOB-noisy suite (``bbob_noisy_f101`` ... ``bbob_noisy_f130``)
+    is inherently stochastic: eight base landscapes disturbed by the
+    Gaussian, uniform or Cauchy noise model at moderate (f101-f106) or
+    severe (f107-f130) severity. The noise disturbs only the residual
+    above the optimum, so tasks always set ``pass_rng=True`` and there
+    is no extra ``noise`` knob (unlike the deterministic suites).
+
+    Parameters
+    ----------
+    fn_name : str
+        Name of the BBOB-noisy benchmark function
+        (``"bbob_noisy_f101"`` ... ``"bbob_noisy_f130"``).
+    seed : int
+        Random seed for function instance generation.
+    dimensionality : int
+        Dimensionality of the optimization problem.
+
+    Returns
+    -------
+    Task
+        Configured optimization task with scaled, inherently noisy
+        objective function (``pass_rng=True``). ``tag`` carries the
+        ``bbob_jax`` characteristics: ``separable`` / ``unimodal``
+        describe the undisturbed base function, and the noise model is
+        recorded in the ``gaussian_noise`` / ``uniform_noise`` /
+        ``cauchy_noise`` / ``severe`` / ``noise`` flags.
+
+    Raises
+    ------
+    ImportError
+        If the installed ``bbob-jax`` predates the BBOB-noisy suite
+        (releases up to 1.8.0 do not include it).
+
+    Notes
+    -----
+    Input domain is [0, 1]^d which is scaled to the suite's standard
+    [-5, 5]^d range. ``global_min`` is the instance's ``f_opt``: the
+    infimum of the *undisturbed* value. The Cauchy noise model is
+    signed and heavy-tailed, so observed noisy values can dip below
+    it.
+    """
+    registry = getattr(bbob_jax, "bbob_noisy_registry", None)
+    if registry is None:
+        raise ImportError(
+            "create_bbob_noisy_task requires a bbob-jax with the "
+            "BBOB-noisy suite (bbob_noisy_registry); releases up to "
+            "1.8.0 do not include it. Upgrade bbob-jax."
+        )
+
+    fn_scale_input = scale_input(
+        domain_bounds=jnp.tile(jnp.array([0.0, 1.0]), (dimensionality, 1)),
+        function_bounds=jnp.tile(jnp.array([-5.0, 5.0]), (dimensionality, 1)),
+    )
+
+    noisy_fn, global_min = registry[fn_name](
+        ndim=dimensionality, key=jr.key(seed)
+    )
+
+    loss_fn = fn_scale_input(noisy_fn)
+    model = jnp.zeros(dimensionality)
+    tag = bbob_jax.bbob_noisy_function_characteristics[fn_name].copy()
+    tag["dimensionality"] = dimensionality
+    tag["fn_name"] = fn_name
+    tag["seed"] = seed
+
+    return Task(
+        model=model,
+        global_min=float(global_min),
+        pass_rng=True,
         loss_fn=loss_fn,
         tag=tag,
     )
