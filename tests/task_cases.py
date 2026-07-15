@@ -33,6 +33,7 @@ from l2co_tasks import (
     create_bbob_task,
     create_cec2005_task,
     create_cec2017_task,
+    create_embedded_bbob_task,
     create_euler_task,
     create_gaussian_meta_task,
     create_gaussian_task,
@@ -108,6 +109,19 @@ def _cec2017(fn_name: str, dimensionality: int = 3) -> Callable[[Path], Task]:
     """
     return lambda _p: create_cec2017_task(
         fn_name=fn_name, seed=0, dimensionality=dimensionality
+    )
+
+
+def _embedded_bbob(
+    fn_name: str, bulk_scale: float = 0.0
+) -> Callable[[Path], Task]:
+    """Return a builder for a small randomly-embedded BBOB task."""
+    return lambda _p: create_embedded_bbob_task(
+        fn_name=fn_name,
+        seed=0,
+        intrinsic_dim=2,
+        ambient_dim=8,
+        bulk_scale=bulk_scale,
     )
 
 
@@ -356,6 +370,25 @@ TASK_CASES: list[TaskCase] = [
         "cec2017-f17",
         "create_cec2017_task",
         _cec2017("cec2017_f17", dimensionality=5),
+        domain="unit",
+        gmin_is_lower_bound=True,
+    ),
+    # Randomly-embedded BBOB: low intrinsic dimension inside a larger
+    # ambient space. The optimum is attained exactly at the seeded
+    # anchor point, so global_min stays a true lower bound.
+    TaskCase(
+        "embedded-sphere",
+        "create_embedded_bbob_task",
+        _embedded_bbob("sphere"),
+        domain="unit",
+        gmin_is_lower_bound=True,
+    ),
+    # bulk_scale > 0 exercises the null-space penalty path (unique
+    # minimiser instead of a flat manifold of minimisers).
+    TaskCase(
+        "embedded-rastrigin-bulk",
+        "create_embedded_bbob_task",
+        _embedded_bbob("rastrigin", bulk_scale=1e-2),
         domain="unit",
         gmin_is_lower_bound=True,
     ),

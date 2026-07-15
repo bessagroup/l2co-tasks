@@ -20,6 +20,17 @@ Benchmark a task's best achievable loss with a short, seeded, multi-restart Adam
 
 ::: l2co_tasks.create_bbob_task
 
+## Embedded BBOB benchmark functions
+
+BBOB functions composed with a random low-rank affine embedding: an
+`intrinsic_dim`-dimensional function hidden inside the
+`[0, 1]^ambient_dim` search space. Gradients are confined to a
+low-dimensional subspace and the Hessian spectrum is
+bulk-plus-outliers, mimicking the measured geometry of neural-network
+loss landscapes without using a neural network.
+
+::: l2co_tasks.create_embedded_bbob_task
+
 ## CEC 2005 benchmark functions
 
 ::: l2co_tasks.create_cec2005_task

@@ -157,6 +157,27 @@ def test_cec2005_f1_loss_at_optimum_equals_global_min(build_case):
 
 
 # ---------------------------------------------------------------------------
+# Embedded BBOB: loss at the anchor point equals global_min
+# ---------------------------------------------------------------------------
+#
+# The embedded factory anchors the offset so the optimum preimage is a
+# seeded uniform draw ``x_star``, bound into the loss partial. Both the
+# flat (bulk_scale=0) and curved null-space cases must attain
+# ``global_min`` there exactly (the penalty vanishes at the anchor).
+
+
+@pytest.mark.parametrize(
+    "case_id", ["embedded-sphere", "embedded-rastrigin-bulk"]
+)
+def test_embedded_bbob_loss_at_anchor_equals_global_min(case_id, build_case):
+    """The embedded loss attains ``global_min`` at the anchor point."""
+    task = build_case(case_id)
+    x_star = task.loss_fn.keywords["x_star"]
+    loss = evaluate_task_loss(task, x_star)
+    assert jnp.isclose(loss, task.global_min, rtol=1e-4, atol=1e-2)
+
+
+# ---------------------------------------------------------------------------
 # PINNs: substituting the exact solution drives the loss to ~0
 # ---------------------------------------------------------------------------
 #
