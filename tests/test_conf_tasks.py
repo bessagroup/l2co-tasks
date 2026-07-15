@@ -75,6 +75,20 @@ _OVERLAYS: dict[str, dict] = {
             }
         },
     },
+    "bbob_embedded": {
+        "experimentdata": {
+            "domain": {
+                "input": {
+                    "fn_name": {
+                        "type": "category",
+                        "categories": ["sphere", "rastrigin"],
+                    },
+                    "intrinsic_dim": {"type": "category", "categories": [2]},
+                    "ambient_dim": {"type": "category", "categories": [8]},
+                }
+            }
+        },
+    },
     "cec2005": {
         "experimentdata": {
             "domain": {

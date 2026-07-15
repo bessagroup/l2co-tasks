@@ -1,0 +1,91 @@
+# Full BBOB suite through the random low-rank affine embedding
+# (create_embedded_bbob_task): every function is hidden inside a
+# higher-dimensional ambient search space, giving rank-`intrinsic_dim`
+# gradients and a bulk-plus-outliers Hessian spectrum.
+# 24 functions × 6 intrinsic × 3 ambient dimensionalities × 1 seed
+# = 432 tasks. Shrink or extend per run with overrides, e.g.
+#   tasks.experimentdata.domain.input.ambient_dim.categories=[2048]
+sampler:
+  _target_: f3dasm.create_sampler
+  sampler: "grid"  # one row per (fn_name × intrinsic_dim × ambient_dim × seed)
+sampler_kwargs:    # Extra keyword args forwarded to the sampler call (null = none)
+
+experimentdata:
+  domain:
+    input:
+      fn_name:
+        type: category
+        categories:
+          - 'attractive_sector'
+          - 'bent_cigar'
+          - 'discuss'
+          - 'ellipsoid'
+          - 'ellipsoid_seperable'
+          - 'gallagher_101_peaks'
+          - 'gallagher_21_peaks'
+          - 'griewank_rosenbrock_f8f2'
+          - 'katsuura'
+          - 'linear_slope'
+          - 'lunacek_bi_rastrigin'
+          - 'rastrigin'
+          - 'rastrigin_seperable'
+          - 'rosenbrock'
+          - 'rosenbrock_rotated'
+          - 'schaffer_f7_condition_10'
+          - 'schaffer_f7_condition_1000'
+          - 'schwefel_xsinx'
+          - 'sharp_ridge'
+          - 'skew_rastrigin_bueche'
+          - 'sphere'
+          - 'step_ellipsoid'
+          - 'sum_of_different_powers'
+          - 'weierstrass'
+      intrinsic_dim:
+        # Dimensionality of the underlying BBOB function (the native
+        # bbob.yaml dimensions).
+        type: category
+        categories:
+          - 2
+          - 3
+          - 5
+          - 10
+          - 20
+          - 40
+      ambient_dim:
+        # Dimensionality of the search space the optimizers see; must
+        # be at least the largest intrinsic_dim.
+        type: category
+        categories:
+          - 64
+          - 256
+          - 1024
+      seed:
+        type: int
+        low: 0
+        high: 0
+
+task_kwargs:
+  # Curvature given to the (ambient_dim - intrinsic_dim) null-space
+  # directions: 0.0 keeps the null space exactly flat (a manifold of
+  # minimisers); a small positive value (e.g. 1.0e-4) gives a curved
+  # Papyan-style bulk and a unique minimiser. Override per run with
+  #   tasks.task_kwargs.bulk_scale=1e-4
+  bulk_scale: 0.0
+
+data_generator:
+  # Factory function that creates a Task object from each ExperimentData row
+  _target_: l2co_tasks.create_embedded_bbob_task
+  _partial_: True
+
+schema:
+  # Same feature schema as bbob.yaml so embedded tasks are drop-in
+  # compatible with models trained on the native suite. The embedding
+  # metadata (intrinsic_dimensionality, bulk_scale, embedded) stays in
+  # the task tags but is deliberately not exposed as a policy feature —
+  # it would not be observable on out-of-distribution tasks.
+  dimensionality: continuous
+  separable: boolean
+  unimodal: boolean
+
+# [lower, upper] for bounded tasks, omit (or null) for unbounded.
+bounded:
