@@ -1,0 +1,332 @@
+# Balanced train set — ERTD-balanced subset across the 3 BBOB suites.
+#
+# 284 tasks selected (of 474 on the train function
+# half). Objective: maximize the virtual-best-solver (per-task oracle)
+# auc_logcost subject to keeping the 4 medium-config optimizers balanced.
+# Balance: spread=0.060, common level=0.289.
+# VBS (oracle)=0.455, selection headroom (VBS-level)=0.166.
+# Per-optimizer means: {'lbfgs': 0.3341, 'sepcmaes': 0.2741, 'adam': 0.2742, 'pso': 0.2742}.
+# Per-suite counts: {'bbob': 54, 'bbob_embedded': 171, 'bbob_noisy': 59}.
+#
+# Composite config: `parts` lists one task factory per suite, each with
+# explicit input_data rows (consumed verbatim). The parts-aware
+# create_experimentdata (create_optimization_dataset) builds each part and
+# row-concatenates the resulting tasks. Disjoint functions from the paired
+# test set; same balancing recipe.
+sampler:
+  _target_: f3dasm.create_sampler
+  sampler: "random"  # identity: n_samples=0 appends no rows
+sampler_kwargs:
+  n_samples: 0
+
+parts:
+  # bbob: 54 tasks
+  - data_generator:
+      _target_: l2co_tasks.create_bbob_task
+      _partial_: True
+    task_kwargs:
+    input_data:
+      - {fn_name: attractive_sector, dimensionality: 2, seed: 0}
+      - {fn_name: attractive_sector, dimensionality: 3, seed: 0}
+      - {fn_name: attractive_sector, dimensionality: 5, seed: 0}
+      - {fn_name: attractive_sector, dimensionality: 10, seed: 0}
+      - {fn_name: attractive_sector, dimensionality: 20, seed: 0}
+      - {fn_name: attractive_sector, dimensionality: 40, seed: 0}
+      - {fn_name: ellipsoid_seperable, dimensionality: 2, seed: 0}
+      - {fn_name: ellipsoid_seperable, dimensionality: 3, seed: 0}
+      - {fn_name: ellipsoid_seperable, dimensionality: 5, seed: 0}
+      - {fn_name: ellipsoid_seperable, dimensionality: 10, seed: 0}
+      - {fn_name: ellipsoid_seperable, dimensionality: 20, seed: 0}
+      - {fn_name: ellipsoid_seperable, dimensionality: 40, seed: 0}
+      - {fn_name: gallagher_101_peaks, dimensionality: 3, seed: 0}
+      - {fn_name: gallagher_101_peaks, dimensionality: 10, seed: 0}
+      - {fn_name: gallagher_101_peaks, dimensionality: 40, seed: 0}
+      - {fn_name: gallagher_21_peaks, dimensionality: 2, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, dimensionality: 2, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, dimensionality: 3, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, dimensionality: 5, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, dimensionality: 10, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, dimensionality: 20, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, dimensionality: 40, seed: 0}
+      - {fn_name: lunacek_bi_rastrigin, dimensionality: 2, seed: 0}
+      - {fn_name: lunacek_bi_rastrigin, dimensionality: 3, seed: 0}
+      - {fn_name: lunacek_bi_rastrigin, dimensionality: 5, seed: 0}
+      - {fn_name: lunacek_bi_rastrigin, dimensionality: 10, seed: 0}
+      - {fn_name: lunacek_bi_rastrigin, dimensionality: 20, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, dimensionality: 2, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, dimensionality: 3, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, dimensionality: 5, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, dimensionality: 10, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, dimensionality: 20, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, dimensionality: 40, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, dimensionality: 2, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, dimensionality: 3, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, dimensionality: 5, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, dimensionality: 10, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, dimensionality: 20, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, dimensionality: 40, seed: 0}
+      - {fn_name: schwefel_xsinx, dimensionality: 2, seed: 0}
+      - {fn_name: schwefel_xsinx, dimensionality: 3, seed: 0}
+      - {fn_name: skew_rastrigin_bueche, dimensionality: 2, seed: 0}
+      - {fn_name: skew_rastrigin_bueche, dimensionality: 3, seed: 0}
+      - {fn_name: skew_rastrigin_bueche, dimensionality: 5, seed: 0}
+      - {fn_name: sphere, dimensionality: 2, seed: 0}
+      - {fn_name: sphere, dimensionality: 3, seed: 0}
+      - {fn_name: sphere, dimensionality: 5, seed: 0}
+      - {fn_name: sphere, dimensionality: 10, seed: 0}
+      - {fn_name: sphere, dimensionality: 40, seed: 0}
+      - {fn_name: weierstrass, dimensionality: 2, seed: 0}
+      - {fn_name: weierstrass, dimensionality: 3, seed: 0}
+      - {fn_name: weierstrass, dimensionality: 5, seed: 0}
+      - {fn_name: weierstrass, dimensionality: 10, seed: 0}
+      - {fn_name: weierstrass, dimensionality: 20, seed: 0}
+  # bbob_embedded: 171 tasks
+  - data_generator:
+      _target_: l2co_tasks.create_embedded_bbob_task
+      _partial_: True
+    task_kwargs:
+      bulk_scale: 0.0
+    input_data:
+      - {fn_name: attractive_sector, intrinsic_dim: 3, ambient_dim: 64, seed: 0}
+      - {fn_name: attractive_sector, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
+      - {fn_name: attractive_sector, intrinsic_dim: 10, ambient_dim: 64, seed: 0}
+      - {fn_name: attractive_sector, intrinsic_dim: 20, ambient_dim: 64, seed: 0}
+      - {fn_name: attractive_sector, intrinsic_dim: 40, ambient_dim: 64, seed: 0}
+      - {fn_name: attractive_sector, intrinsic_dim: 2, ambient_dim: 256, seed: 0}
+      - {fn_name: attractive_sector, intrinsic_dim: 3, ambient_dim: 256, seed: 0}
+      - {fn_name: attractive_sector, intrinsic_dim: 5, ambient_dim: 256, seed: 0}
+      - {fn_name: attractive_sector, intrinsic_dim: 10, ambient_dim: 256, seed: 0}
+      - {fn_name: attractive_sector, intrinsic_dim: 20, ambient_dim: 256, seed: 0}
+      - {fn_name: attractive_sector, intrinsic_dim: 40, ambient_dim: 256, seed: 0}
+      - {fn_name: attractive_sector, intrinsic_dim: 20, ambient_dim: 1024, seed: 0}
+      - {fn_name: attractive_sector, intrinsic_dim: 40, ambient_dim: 1024, seed: 0}
+      - {fn_name: discuss, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
+      - {fn_name: discuss, intrinsic_dim: 3, ambient_dim: 64, seed: 0}
+      - {fn_name: discuss, intrinsic_dim: 2, ambient_dim: 256, seed: 0}
+      - {fn_name: discuss, intrinsic_dim: 3, ambient_dim: 256, seed: 0}
+      - {fn_name: discuss, intrinsic_dim: 5, ambient_dim: 256, seed: 0}
+      - {fn_name: discuss, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
+      - {fn_name: ellipsoid, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
+      - {fn_name: ellipsoid, intrinsic_dim: 3, ambient_dim: 64, seed: 0}
+      - {fn_name: ellipsoid, intrinsic_dim: 2, ambient_dim: 256, seed: 0}
+      - {fn_name: ellipsoid, intrinsic_dim: 3, ambient_dim: 256, seed: 0}
+      - {fn_name: ellipsoid, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
+      - {fn_name: ellipsoid_seperable, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
+      - {fn_name: ellipsoid_seperable, intrinsic_dim: 3, ambient_dim: 64, seed: 0}
+      - {fn_name: ellipsoid_seperable, intrinsic_dim: 2, ambient_dim: 256, seed: 0}
+      - {fn_name: ellipsoid_seperable, intrinsic_dim: 3, ambient_dim: 256, seed: 0}
+      - {fn_name: ellipsoid_seperable, intrinsic_dim: 5, ambient_dim: 256, seed: 0}
+      - {fn_name: ellipsoid_seperable, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
+      - {fn_name: gallagher_101_peaks, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
+      - {fn_name: gallagher_101_peaks, intrinsic_dim: 3, ambient_dim: 64, seed: 0}
+      - {fn_name: gallagher_101_peaks, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
+      - {fn_name: gallagher_101_peaks, intrinsic_dim: 40, ambient_dim: 64, seed: 0}
+      - {fn_name: gallagher_101_peaks, intrinsic_dim: 2, ambient_dim: 256, seed: 0}
+      - {fn_name: gallagher_101_peaks, intrinsic_dim: 3, ambient_dim: 256, seed: 0}
+      - {fn_name: gallagher_101_peaks, intrinsic_dim: 5, ambient_dim: 256, seed: 0}
+      - {fn_name: gallagher_101_peaks, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
+      - {fn_name: gallagher_101_peaks, intrinsic_dim: 3, ambient_dim: 1024, seed: 0}
+      - {fn_name: gallagher_101_peaks, intrinsic_dim: 5, ambient_dim: 1024, seed: 0}
+      - {fn_name: gallagher_21_peaks, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
+      - {fn_name: gallagher_21_peaks, intrinsic_dim: 3, ambient_dim: 64, seed: 0}
+      - {fn_name: gallagher_21_peaks, intrinsic_dim: 2, ambient_dim: 256, seed: 0}
+      - {fn_name: gallagher_21_peaks, intrinsic_dim: 3, ambient_dim: 256, seed: 0}
+      - {fn_name: gallagher_21_peaks, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
+      - {fn_name: gallagher_21_peaks, intrinsic_dim: 10, ambient_dim: 1024, seed: 0}
+      - {fn_name: gallagher_21_peaks, intrinsic_dim: 40, ambient_dim: 1024, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, intrinsic_dim: 3, ambient_dim: 64, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, intrinsic_dim: 10, ambient_dim: 64, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, intrinsic_dim: 20, ambient_dim: 64, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, intrinsic_dim: 40, ambient_dim: 64, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, intrinsic_dim: 2, ambient_dim: 256, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, intrinsic_dim: 3, ambient_dim: 256, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, intrinsic_dim: 5, ambient_dim: 256, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, intrinsic_dim: 10, ambient_dim: 256, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, intrinsic_dim: 20, ambient_dim: 256, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, intrinsic_dim: 40, ambient_dim: 256, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, intrinsic_dim: 3, ambient_dim: 1024, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, intrinsic_dim: 5, ambient_dim: 1024, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, intrinsic_dim: 10, ambient_dim: 1024, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, intrinsic_dim: 20, ambient_dim: 1024, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, intrinsic_dim: 40, ambient_dim: 1024, seed: 0}
+      - {fn_name: lunacek_bi_rastrigin, intrinsic_dim: 3, ambient_dim: 64, seed: 0}
+      - {fn_name: lunacek_bi_rastrigin, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
+      - {fn_name: lunacek_bi_rastrigin, intrinsic_dim: 10, ambient_dim: 64, seed: 0}
+      - {fn_name: lunacek_bi_rastrigin, intrinsic_dim: 3, ambient_dim: 256, seed: 0}
+      - {fn_name: lunacek_bi_rastrigin, intrinsic_dim: 5, ambient_dim: 256, seed: 0}
+      - {fn_name: lunacek_bi_rastrigin, intrinsic_dim: 10, ambient_dim: 256, seed: 0}
+      - {fn_name: lunacek_bi_rastrigin, intrinsic_dim: 20, ambient_dim: 256, seed: 0}
+      - {fn_name: lunacek_bi_rastrigin, intrinsic_dim: 40, ambient_dim: 256, seed: 0}
+      - {fn_name: lunacek_bi_rastrigin, intrinsic_dim: 5, ambient_dim: 1024, seed: 0}
+      - {fn_name: rosenbrock, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
+      - {fn_name: rosenbrock, intrinsic_dim: 3, ambient_dim: 64, seed: 0}
+      - {fn_name: rosenbrock, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
+      - {fn_name: rosenbrock, intrinsic_dim: 2, ambient_dim: 256, seed: 0}
+      - {fn_name: rosenbrock, intrinsic_dim: 3, ambient_dim: 256, seed: 0}
+      - {fn_name: rosenbrock, intrinsic_dim: 5, ambient_dim: 256, seed: 0}
+      - {fn_name: rosenbrock, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
+      - {fn_name: rosenbrock, intrinsic_dim: 3, ambient_dim: 1024, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, intrinsic_dim: 3, ambient_dim: 64, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, intrinsic_dim: 10, ambient_dim: 64, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, intrinsic_dim: 20, ambient_dim: 64, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, intrinsic_dim: 40, ambient_dim: 64, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, intrinsic_dim: 2, ambient_dim: 256, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, intrinsic_dim: 3, ambient_dim: 256, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, intrinsic_dim: 5, ambient_dim: 256, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, intrinsic_dim: 10, ambient_dim: 256, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, intrinsic_dim: 20, ambient_dim: 256, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, intrinsic_dim: 40, ambient_dim: 256, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, intrinsic_dim: 3, ambient_dim: 1024, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, intrinsic_dim: 5, ambient_dim: 1024, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, intrinsic_dim: 10, ambient_dim: 1024, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, intrinsic_dim: 20, ambient_dim: 1024, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, intrinsic_dim: 40, ambient_dim: 1024, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, intrinsic_dim: 3, ambient_dim: 64, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, intrinsic_dim: 10, ambient_dim: 64, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, intrinsic_dim: 20, ambient_dim: 64, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, intrinsic_dim: 40, ambient_dim: 64, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, intrinsic_dim: 2, ambient_dim: 256, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, intrinsic_dim: 3, ambient_dim: 256, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, intrinsic_dim: 5, ambient_dim: 256, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, intrinsic_dim: 10, ambient_dim: 256, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, intrinsic_dim: 20, ambient_dim: 256, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, intrinsic_dim: 40, ambient_dim: 256, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, intrinsic_dim: 3, ambient_dim: 1024, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, intrinsic_dim: 5, ambient_dim: 1024, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, intrinsic_dim: 10, ambient_dim: 1024, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, intrinsic_dim: 20, ambient_dim: 1024, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, intrinsic_dim: 40, ambient_dim: 1024, seed: 0}
+      - {fn_name: schwefel_xsinx, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
+      - {fn_name: schwefel_xsinx, intrinsic_dim: 3, ambient_dim: 64, seed: 0}
+      - {fn_name: schwefel_xsinx, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
+      - {fn_name: schwefel_xsinx, intrinsic_dim: 2, ambient_dim: 256, seed: 0}
+      - {fn_name: schwefel_xsinx, intrinsic_dim: 3, ambient_dim: 256, seed: 0}
+      - {fn_name: schwefel_xsinx, intrinsic_dim: 5, ambient_dim: 256, seed: 0}
+      - {fn_name: schwefel_xsinx, intrinsic_dim: 10, ambient_dim: 256, seed: 0}
+      - {fn_name: schwefel_xsinx, intrinsic_dim: 20, ambient_dim: 256, seed: 0}
+      - {fn_name: schwefel_xsinx, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
+      - {fn_name: schwefel_xsinx, intrinsic_dim: 3, ambient_dim: 1024, seed: 0}
+      - {fn_name: schwefel_xsinx, intrinsic_dim: 5, ambient_dim: 1024, seed: 0}
+      - {fn_name: skew_rastrigin_bueche, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
+      - {fn_name: skew_rastrigin_bueche, intrinsic_dim: 3, ambient_dim: 64, seed: 0}
+      - {fn_name: skew_rastrigin_bueche, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
+      - {fn_name: skew_rastrigin_bueche, intrinsic_dim: 10, ambient_dim: 64, seed: 0}
+      - {fn_name: skew_rastrigin_bueche, intrinsic_dim: 3, ambient_dim: 256, seed: 0}
+      - {fn_name: skew_rastrigin_bueche, intrinsic_dim: 5, ambient_dim: 256, seed: 0}
+      - {fn_name: skew_rastrigin_bueche, intrinsic_dim: 10, ambient_dim: 256, seed: 0}
+      - {fn_name: skew_rastrigin_bueche, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
+      - {fn_name: skew_rastrigin_bueche, intrinsic_dim: 3, ambient_dim: 1024, seed: 0}
+      - {fn_name: sphere, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
+      - {fn_name: sphere, intrinsic_dim: 3, ambient_dim: 64, seed: 0}
+      - {fn_name: sphere, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
+      - {fn_name: sphere, intrinsic_dim: 10, ambient_dim: 64, seed: 0}
+      - {fn_name: sphere, intrinsic_dim: 20, ambient_dim: 64, seed: 0}
+      - {fn_name: sphere, intrinsic_dim: 40, ambient_dim: 64, seed: 0}
+      - {fn_name: sphere, intrinsic_dim: 2, ambient_dim: 256, seed: 0}
+      - {fn_name: sphere, intrinsic_dim: 3, ambient_dim: 256, seed: 0}
+      - {fn_name: sphere, intrinsic_dim: 5, ambient_dim: 256, seed: 0}
+      - {fn_name: sphere, intrinsic_dim: 10, ambient_dim: 256, seed: 0}
+      - {fn_name: sphere, intrinsic_dim: 20, ambient_dim: 256, seed: 0}
+      - {fn_name: sphere, intrinsic_dim: 40, ambient_dim: 256, seed: 0}
+      - {fn_name: sphere, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
+      - {fn_name: sphere, intrinsic_dim: 3, ambient_dim: 1024, seed: 0}
+      - {fn_name: sphere, intrinsic_dim: 5, ambient_dim: 1024, seed: 0}
+      - {fn_name: weierstrass, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
+      - {fn_name: weierstrass, intrinsic_dim: 3, ambient_dim: 64, seed: 0}
+      - {fn_name: weierstrass, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
+      - {fn_name: weierstrass, intrinsic_dim: 10, ambient_dim: 64, seed: 0}
+      - {fn_name: weierstrass, intrinsic_dim: 20, ambient_dim: 64, seed: 0}
+      - {fn_name: weierstrass, intrinsic_dim: 40, ambient_dim: 64, seed: 0}
+      - {fn_name: weierstrass, intrinsic_dim: 2, ambient_dim: 256, seed: 0}
+      - {fn_name: weierstrass, intrinsic_dim: 3, ambient_dim: 256, seed: 0}
+      - {fn_name: weierstrass, intrinsic_dim: 5, ambient_dim: 256, seed: 0}
+      - {fn_name: weierstrass, intrinsic_dim: 10, ambient_dim: 256, seed: 0}
+      - {fn_name: weierstrass, intrinsic_dim: 20, ambient_dim: 256, seed: 0}
+      - {fn_name: weierstrass, intrinsic_dim: 40, ambient_dim: 256, seed: 0}
+      - {fn_name: weierstrass, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
+      - {fn_name: weierstrass, intrinsic_dim: 3, ambient_dim: 1024, seed: 0}
+      - {fn_name: weierstrass, intrinsic_dim: 5, ambient_dim: 1024, seed: 0}
+      - {fn_name: weierstrass, intrinsic_dim: 10, ambient_dim: 1024, seed: 0}
+      - {fn_name: weierstrass, intrinsic_dim: 20, ambient_dim: 1024, seed: 0}
+      - {fn_name: weierstrass, intrinsic_dim: 40, ambient_dim: 1024, seed: 0}
+  # bbob_noisy: 59 tasks
+  - data_generator:
+      _target_: l2co_tasks.create_bbob_noisy_task
+      _partial_: True
+    task_kwargs:
+    input_data:
+      - {fn_name: bbob_noisy_f101, dimensionality: 2, seed: 0}
+      - {fn_name: bbob_noisy_f101, dimensionality: 3, seed: 0}
+      - {fn_name: bbob_noisy_f101, dimensionality: 5, seed: 0}
+      - {fn_name: bbob_noisy_f101, dimensionality: 10, seed: 0}
+      - {fn_name: bbob_noisy_f101, dimensionality: 20, seed: 0}
+      - {fn_name: bbob_noisy_f101, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f105, dimensionality: 2, seed: 0}
+      - {fn_name: bbob_noisy_f105, dimensionality: 20, seed: 0}
+      - {fn_name: bbob_noisy_f105, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f107, dimensionality: 2, seed: 0}
+      - {fn_name: bbob_noisy_f107, dimensionality: 3, seed: 0}
+      - {fn_name: bbob_noisy_f107, dimensionality: 5, seed: 0}
+      - {fn_name: bbob_noisy_f107, dimensionality: 10, seed: 0}
+      - {fn_name: bbob_noisy_f107, dimensionality: 20, seed: 0}
+      - {fn_name: bbob_noisy_f107, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f108, dimensionality: 2, seed: 0}
+      - {fn_name: bbob_noisy_f108, dimensionality: 3, seed: 0}
+      - {fn_name: bbob_noisy_f108, dimensionality: 5, seed: 0}
+      - {fn_name: bbob_noisy_f108, dimensionality: 10, seed: 0}
+      - {fn_name: bbob_noisy_f108, dimensionality: 20, seed: 0}
+      - {fn_name: bbob_noisy_f108, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f110, dimensionality: 2, seed: 0}
+      - {fn_name: bbob_noisy_f110, dimensionality: 3, seed: 0}
+      - {fn_name: bbob_noisy_f110, dimensionality: 5, seed: 0}
+      - {fn_name: bbob_noisy_f110, dimensionality: 10, seed: 0}
+      - {fn_name: bbob_noisy_f110, dimensionality: 20, seed: 0}
+      - {fn_name: bbob_noisy_f110, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f115, dimensionality: 2, seed: 0}
+      - {fn_name: bbob_noisy_f115, dimensionality: 5, seed: 0}
+      - {fn_name: bbob_noisy_f115, dimensionality: 10, seed: 0}
+      - {fn_name: bbob_noisy_f115, dimensionality: 20, seed: 0}
+      - {fn_name: bbob_noisy_f115, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f117, dimensionality: 2, seed: 0}
+      - {fn_name: bbob_noisy_f117, dimensionality: 3, seed: 0}
+      - {fn_name: bbob_noisy_f117, dimensionality: 5, seed: 0}
+      - {fn_name: bbob_noisy_f117, dimensionality: 10, seed: 0}
+      - {fn_name: bbob_noisy_f117, dimensionality: 20, seed: 0}
+      - {fn_name: bbob_noisy_f117, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f122, dimensionality: 2, seed: 0}
+      - {fn_name: bbob_noisy_f122, dimensionality: 3, seed: 0}
+      - {fn_name: bbob_noisy_f122, dimensionality: 5, seed: 0}
+      - {fn_name: bbob_noisy_f122, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f125, dimensionality: 2, seed: 0}
+      - {fn_name: bbob_noisy_f125, dimensionality: 3, seed: 0}
+      - {fn_name: bbob_noisy_f125, dimensionality: 5, seed: 0}
+      - {fn_name: bbob_noisy_f125, dimensionality: 10, seed: 0}
+      - {fn_name: bbob_noisy_f125, dimensionality: 20, seed: 0}
+      - {fn_name: bbob_noisy_f125, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f127, dimensionality: 10, seed: 0}
+      - {fn_name: bbob_noisy_f127, dimensionality: 20, seed: 0}
+      - {fn_name: bbob_noisy_f127, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f129, dimensionality: 2, seed: 0}
+      - {fn_name: bbob_noisy_f129, dimensionality: 3, seed: 0}
+      - {fn_name: bbob_noisy_f129, dimensionality: 5, seed: 0}
+      - {fn_name: bbob_noisy_f130, dimensionality: 2, seed: 0}
+      - {fn_name: bbob_noisy_f130, dimensionality: 3, seed: 0}
+      - {fn_name: bbob_noisy_f130, dimensionality: 5, seed: 0}
+      - {fn_name: bbob_noisy_f130, dimensionality: 10, seed: 0}
+      - {fn_name: bbob_noisy_f130, dimensionality: 40, seed: 0}
+
+schema:
+  dimensionality: continuous
+  separable: boolean
+  unimodal: boolean
+
+bounded:

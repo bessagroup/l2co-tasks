@@ -29,7 +29,12 @@ from l2co_tasks import Task, create_tasks_experimentdata
 
 # Configs whose data generator needs the BBOB-noisy suite, which ships
 # with bbob-jax releases newer than 1.8.0; on older installs they skip.
-_NEEDS_BBOB_NOISY = {"bbob_noisy"}
+# The balanced composites include a bbob_noisy ``parts`` entry.
+_NEEDS_BBOB_NOISY = {
+    "bbob_noisy",
+    "bbob_balanced_train",
+    "bbob_balanced_test",
+}
 _HAS_BBOB_NOISY = hasattr(bbob_jax, "bbob_noisy_registry")
 
 # OmegaConf overlays merged on top of each raw YAML before sampling.
@@ -269,6 +274,10 @@ _SLOW = {
     "euler",
     "stokes",
     "pkpd",
+    # 284-task ERTD-balanced composites — materialised in full (their
+    # identity sampler admits no shrinking overlay).
+    "bbob_balanced_train",
+    "bbob_balanced_test",
 }
 
 
@@ -350,3 +359,77 @@ def test_sample_task_distribution(
             f"{config_name!r}: row produced {type(task).__name__}, "
             f"expected Task"
         )
+
+
+@pytest.mark.requires_f3dasm
+def test_composite_parts_experimentdata(tmp_path: Path) -> None:
+    """A ``parts`` composite row-concatenates one task set per entry.
+
+    Uses two different factories (``create_bbob_task`` +
+    ``create_embedded_bbob_task``) to exercise the cross-factory concat.
+    Asserts the parts are materialised into a single ``project_dir`` with
+    unique ``task/<idx>`` files (no overwrite between parts) and that each
+    row loads the Task from the factory of its part, in order.
+    """
+    cfg = OmegaConf.create(
+        {
+            "sampler": {
+                "_target_": "f3dasm.create_sampler",
+                "sampler": "random",
+            },
+            "sampler_kwargs": {"n_samples": 0},
+            "parts": [
+                {
+                    "data_generator": {
+                        "_target_": "l2co_tasks.create_bbob_task",
+                        "_partial_": True,
+                    },
+                    "task_kwargs": None,
+                    "input_data": [
+                        {"fn_name": "sphere", "dimensionality": 2, "seed": 0},
+                        {"fn_name": "sphere", "dimensionality": 3, "seed": 0},
+                    ],
+                },
+                {
+                    "data_generator": {
+                        "_target_": "l2co_tasks.create_embedded_bbob_task",
+                        "_partial_": True,
+                    },
+                    "task_kwargs": {"bulk_scale": 0.0},
+                    "input_data": [
+                        {
+                            "fn_name": "sphere",
+                            "intrinsic_dim": 2,
+                            "ambient_dim": 64,
+                            "seed": 0,
+                        },
+                    ],
+                },
+            ],
+        }
+    )
+
+    project_dir = tmp_path / "tasks"
+    experiment_data = create_tasks_experimentdata(cfg, project_dir)
+    experiment_data.store()
+
+    # 2 + 1 rows, re-keyed to a contiguous range.
+    assert len(experiment_data) == 3
+    assert list(experiment_data.data.keys()) == [0, 1, 2]
+
+    # Parts share one project_dir; their task files must not collide.
+    task_dir = project_dir / "experiment_data" / "task"
+    assert sorted(p.stem for p in task_dir.iterdir()) == ["0", "1", "2"]
+
+    tasks = [sample.output_data["task"] for _, sample in experiment_data]
+    assert all(isinstance(t, Task) for t in tasks)
+    # Rows land in part order and are not overwritten by later parts:
+    # the first two come from create_bbob_task (dims 2, 3), the third
+    # from create_embedded_bbob_task (ambient dim 64, embedded flag set).
+    assert [t.tag["fn_name"] for t in tasks] == ["sphere"] * 3
+    assert [t.tag["dimensionality"] for t in tasks] == [2, 3, 64]
+    assert [t.tag.get("embedded", False) for t in tasks] == [
+        False,
+        False,
+        True,
+    ]
