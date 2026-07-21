@@ -75,29 +75,24 @@ def create_tasks_experimentdata(
     ``task`` output column that references the materialised
     :class:`Task` on disk (via ``Task.save`` / ``Task.load``).
 
-    The function performs four steps:
+    Two config shapes are accepted:
 
-    1. Instantiate the initial ExperimentData from
-       ``config.experimentdata`` (defines the task hyperparameter
-       domain and any seed rows). Either give a ``domain`` for the
-       sampler to expand, or an inline ``input_data`` list of per-task
-       rows (materialised from OmegaConf to native containers here)
-       paired with a no-op sampler — the latter pins a distinct
-       hyperparameter set per task, which the cross-product ``grid``
-       sampler cannot express.
-    2. Set its project directory to ``project_dir`` so that task
-       files are written under ``project_dir/experiment_data/task/``.
-    3. Expand the seed rows by calling the sampler Block defined by
-       ``config.sampler`` with the kwargs from
-       ``config.sampler_kwargs``.
-    4. Materialise each row into a :class:`Task` via the data
-       generator defined by ``config.data_generator``, passing
-       ``config.task_kwargs`` to its call.
+    * **single-generator** — the config binds one ``data_generator``
+      to an ``experimentdata`` spec (see :func:`_build_tasks_part`).
+    * **composite** — the config carries a top-level ``parts`` list,
+      one ``{data_generator, task_kwargs, input_data}`` block per group
+      sharing the enclosing ``sampler`` / ``sampler_kwargs``. Each part
+      is built and the resulting task sets are row-concatenated (see
+      :func:`_create_composite_tasks_experimentdata`). This expresses a
+      distribution spanning several task factories — e.g. the
+      ERTD-balanced ``bbob_balanced_*`` sets, whose BBOB / embedded /
+      noisy suites each need a different ``create_*`` factory.
 
     Parameters
     ----------
     config : DictConfig
-        Hydra config describing the tasks. Required keys:
+        Hydra config describing the tasks. For the single-generator
+        shape the required keys are:
 
         ``experimentdata`` : DictConfig
             ``f3dasm.ExperimentData.from_yaml`` spec for the initial
@@ -116,6 +111,10 @@ def create_tasks_experimentdata(
         ``task_kwargs`` : DictConfig or None
             Keyword arguments forwarded to the data generator's
             ``call``. May be ``None`` or omitted.
+
+        For the composite shape, ``sampler`` / ``sampler_kwargs`` are
+        shared and ``parts`` is a list of ``{data_generator,
+        task_kwargs, input_data}`` blocks.
     project_dir : Path
         Project directory under which the task files are stored. Set
         on the ExperimentData before the data generator runs so that
@@ -126,6 +125,105 @@ def create_tasks_experimentdata(
     ExperimentData
         The populated ExperimentData. Not yet stored to disk; call
         ``.store()`` on the result if persistence is required.
+    """
+    if config.get("parts") is not None:
+        return _create_composite_tasks_experimentdata(config, project_dir)
+    return _build_tasks_part(config, project_dir)
+
+
+def _create_composite_tasks_experimentdata(
+    config: DictConfig,
+    project_dir: Path,
+) -> ExperimentData:
+    """Row-concatenate one task set per ``config.parts`` entry.
+
+    Each part reuses :func:`_build_tasks_part` with the enclosing
+    ``sampler`` / ``sampler_kwargs`` and its own ``data_generator`` /
+    ``task_kwargs`` / ``input_data``. Parts are materialised into the
+    *same* ``project_dir`` with a cumulative ``index_offset`` so their
+    on-disk ``task/<idx>`` references (keyed by row index at
+    materialisation time) stay unique; :meth:`ExperimentData.__add__`
+    then re-keys the rows to a contiguous ``0..N-1`` range while
+    preserving those references.
+
+    Parameters
+    ----------
+    config : DictConfig
+        Composite tasks config with ``sampler``, ``sampler_kwargs`` and
+        a ``parts`` list.
+    project_dir : Path
+        Directory the concatenated task files are written under.
+
+    Returns
+    -------
+    ExperimentData
+        The row-concatenated tasks ExperimentData (not yet stored).
+    """
+    combined: ExperimentData | None = None
+    offset = 0
+    for part in config.parts:
+        part_config = OmegaConf.create(
+            {
+                "experimentdata": {"input_data": part.input_data},
+                "sampler": config.sampler,
+                "sampler_kwargs": config.sampler_kwargs,
+                "data_generator": part.data_generator,
+                "task_kwargs": part.get("task_kwargs"),
+            }
+        )
+        ed_part = _build_tasks_part(
+            part_config, project_dir, index_offset=offset
+        )
+        offset += len(ed_part)
+        combined = ed_part if combined is None else combined + ed_part
+    return combined
+
+
+def _build_tasks_part(
+    config: DictConfig,
+    project_dir: Path,
+    index_offset: int = 0,
+) -> ExperimentData:
+    """Build a single-generator tasks ExperimentData.
+
+    Performs four steps:
+
+    1. Instantiate the initial ExperimentData from
+       ``config.experimentdata`` (defines the task hyperparameter
+       domain and any seed rows). Either give a ``domain`` for the
+       sampler to expand, or an inline ``input_data`` list of per-task
+       rows (materialised from OmegaConf to native containers here)
+       paired with a no-op sampler — the latter pins a distinct
+       hyperparameter set per task, which the cross-product ``grid``
+       sampler cannot express.
+    2. Set its project directory to ``project_dir`` so that task
+       files are written under ``project_dir/experiment_data/task/``.
+    3. Expand the seed rows by calling the sampler Block defined by
+       ``config.sampler`` with the kwargs from ``config.sampler_kwargs``.
+    4. Materialise each row into a :class:`Task` via the data
+       generator defined by ``config.data_generator``, passing
+       ``config.task_kwargs`` to its call.
+
+    Parameters
+    ----------
+    config : DictConfig
+        Single-generator tasks config (see
+        :func:`create_tasks_experimentdata`).
+    project_dir : Path
+        Project directory under which the task files are stored.
+    index_offset : int, optional
+        Shift every row's index by this amount before the data
+        generator runs, so the materialised ``task`` files are named
+        ``task/{index_offset}`` upwards instead of ``task/0`` upwards.
+        Lets the composite path build several parts into the *same*
+        ``project_dir`` without their on-disk references colliding
+        (each ``task`` reference is keyed by the row index at
+        materialisation time). Defaults to ``0`` (no shift).
+
+    Returns
+    -------
+    ExperimentData
+        The populated ExperimentData (not yet stored).
     """
     ed_config = config.experimentdata
     if isinstance(ed_config.get("input_data"), ListConfig):
@@ -157,6 +255,22 @@ def create_tasks_experimentdata(
     )
     sampler.arm(experiment_data)
     experiment_data = sampler.call(data=experiment_data)
+
+    if index_offset:
+        # Re-key rows to start at ``index_offset`` before materialisation.
+        # ``_store`` names each ``to_disk`` file by the row index, so this
+        # is what keeps concatenated parts from overwriting one another's
+        # ``task/<idx>`` files in a shared ``project_dir``. Rebuild via
+        # ``from_data`` so the index map is applied cleanly (it re-wraps
+        # ``data`` and routes ``project_dir`` through the setter).
+        experiment_data = ExperimentData.from_data(
+            data={
+                index_offset + i: es
+                for i, es in enumerate(experiment_data.data.values())
+            },
+            domain=experiment_data.domain,
+            project_dir=project_dir,
+        )
 
     task_fn = datagenerator(
         output_names="task",
