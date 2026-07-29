@@ -2,9 +2,31 @@
 # (create_embedded_bbob_task): every function is hidden inside a
 # higher-dimensional ambient search space, giving rank-`intrinsic_dim`
 # gradients and a bulk-plus-outliers Hessian spectrum.
-# 24 functions × 6 intrinsic × 3 ambient dimensionalities × 1 seed
-# = 432 tasks. Shrink or extend per run with overrides, e.g.
+# 24 functions × 4 intrinsic × 2 ambient dimensionalities × 4 seeds
+# = 768 tasks. Extend per run with overrides, e.g.
 #   tasks.experimentdata.domain.input.ambient_dim.categories=[2048]
+#
+# The intrinsic/ambient grids are DELIBERATELY thinned (they used to be
+# 6 × 3 = 1728 tasks, 3× the native bbob.yaml suite). The dropped cells
+# were measured to be redundant on the seed-0 slice of the bbob_embedded
+# databank, using a per-task 64-optimizer success signature and the
+# transfer regret of applying cell A's best optimizer to cell B:
+#   - ambient 256 dropped: 1024 → 256 regret is 0.017, the lowest of all
+#     six ordered ambient pairs, and 64 ↔ 256 is the single most
+#     redundant adjacent pair in the whole grid (cos 0.964, rank
+#     ρ 0.923). 64 and 1024 are both kept for a reason: 64 is the ONLY
+#     ambient dimension where the entire 64-optimizer portfolio runs
+#     (cmaes is absent at 256; asebo/cmaes/iamalgamfull/maes/xnes are
+#     all absent at 1024), while 1024 supplies the extreme
+#     rank-deficiency regime (ambient/intrinsic up to 512).
+#   - intrinsic 3 and 20 dropped: adjacent intrinsic dimensions are
+#     near-duplicates (2 ↔ 3 ρ 0.908, 10 ↔ 20 ρ 0.916, 20 ↔ 40 ρ 0.910,
+#     all with regret ≤ 0.024) while distant ones are not (2 ↔ 40
+#     ρ 0.558), so 3 is covered by 2 and 20 by both 10 and 40.
+# fn_name is left at the full 24 on purpose: no function is
+# uninformative (portfolio success std ≥ 0.089 everywhere), and pruning
+# functions would break the drop-in comparability with bbob.yaml that
+# the shared `schema` below promises.
 sampler:
   _target_: f3dasm.create_sampler
   sampler: "grid"  # one row per (fn_name × intrinsic_dim × ambient_dim × seed)
@@ -41,28 +63,33 @@ experimentdata:
           - 'sum_of_different_powers'
           - 'weierstrass'
       intrinsic_dim:
-        # Dimensionality of the underlying BBOB function (the native
-        # bbob.yaml dimensions).
+        # Dimensionality of the underlying BBOB function (a thinned
+        # subset of the native bbob.yaml dimensions -- 3 and 20 are
+        # redundant with their neighbours; see the header).
         type: category
         categories:
           - 2
-          - 3
           - 5
           - 10
-          - 20
           - 40
       ambient_dim:
         # Dimensionality of the search space the optimizers see; must
-        # be at least the largest intrinsic_dim.
+        # be at least the largest intrinsic_dim. 64 is the only value
+        # where the full optimizer portfolio runs; 1024 gives the
+        # extreme rank-deficiency regime. 256 sits between them and
+        # adds nothing measurable (see the header).
         type: category
         categories:
           - 64
-          - 256
           - 1024
+      # 4 instance seeds per (function, dimensionality): each seed is a
+      # distinct BBOB instance (own shift/rotation, own global_min), so
+      # this multiplies the task pool by 4 rather than repeating work.
+      # Rollout repeats are a separate axis (`n_realizations`).
       seed:
         type: int
         low: 0
-        high: 0
+        high: 3
 
 task_kwargs:
   # Curvature given to the (ambient_dim - intrinsic_dim) null-space

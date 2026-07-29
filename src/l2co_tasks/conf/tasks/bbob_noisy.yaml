@@ -56,10 +56,14 @@ experimentdata:
           - 10
           - 20
           - 40
+      # 4 instance seeds per (function, dimensionality): each seed is a
+      # distinct BBOB instance (own shift/rotation, own global_min), so
+      # this multiplies the task pool by 4 rather than repeating work.
+      # Rollout repeats are a separate axis (`n_realizations`).
       seed:
         type: int
         low: 0
-        high: 0
+        high: 3
 
 task_kwargs:  # Extra keyword args forwarded to the task factory (null = none)
 
