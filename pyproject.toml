@@ -24,7 +24,8 @@ dependencies = [
   "numpy",
   "omegaconf",
   "optax>=0.2.5",
-  "pandas"
+  "pandas",
+  "scipy"
 ]
 description = "Optimization tasks compatible with the L2CO library"
 keywords = ["optimization", "tasks", "benchmarking"]

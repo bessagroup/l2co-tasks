@@ -14,6 +14,7 @@ from ._src.benchmark_task import (
     create_bbob_noisy_task,
     create_bbob_task,
     create_cec2005_task,
+    create_cec2013lsgo_task,
     create_cec2017_task,
 )
 from ._src.embedded_task import create_embedded_bbob_task
@@ -28,6 +29,7 @@ from ._src.quadratic_task import create_quadratic_task
 from ._src.spiral_task import create_spiral_task
 from ._src.stokes import create_stokes_task
 from ._src.task_gaussian_class import create_gaussian_task
+from ._src.uav_task import create_uav_task
 from ._src.viscous_burgers import create_viscous_burgers_task
 
 #                                                          Authorship & Credits
@@ -41,6 +43,7 @@ __all__ = [
     "create_bbob_noisy_task",
     "create_bbob_task",
     "create_cec2005_task",
+    "create_cec2013lsgo_task",
     "create_cec2017_task",
     "create_embedded_bbob_task",
     "create_euler_task",
@@ -54,5 +57,6 @@ __all__ = [
     "create_quadratic_task",
     "create_spiral_task",
     "create_stokes_task",
+    "create_uav_task",
     "create_viscous_burgers_task",
 ]

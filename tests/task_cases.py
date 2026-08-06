@@ -34,6 +34,7 @@ from l2co_tasks import (
     create_bbob_noisy_task,
     create_bbob_task,
     create_cec2005_task,
+    create_cec2013lsgo_task,
     create_cec2017_task,
     create_embedded_bbob_task,
     create_euler_task,
@@ -47,6 +48,7 @@ from l2co_tasks import (
     create_quadratic_task,
     create_spiral_task,
     create_stokes_task,
+    create_uav_task,
     create_viscous_burgers_task,
 )
 
@@ -111,6 +113,18 @@ def _cec2017(fn_name: str, dimensionality: int = 3) -> Callable[[Path], Task]:
     """
     return lambda _p: create_cec2017_task(
         fn_name=fn_name, seed=0, dimensionality=dimensionality
+    )
+
+
+def _cec2013lsgo(fn_name: str) -> Callable[[Path], Task]:
+    """Return a builder for a CEC 2013 LSGO task (fixed native dimension)."""
+    return lambda _p: create_cec2013lsgo_task(fn_name=fn_name)
+
+
+def _uav(_p: Path) -> Task:
+    """Return a tiny UAV task (few waypoints, coarse terrain, no estimate)."""
+    return create_uav_task(
+        terrain_id=0, n_waypoints=4, n_iter=4, estimate_global_min=True
     )
 
 
@@ -335,6 +349,15 @@ _NEEDS_BBOB_NOISY = (
     ),
 )
 
+# CEC 2013 LSGO ships with bbob-jax releases that expose
+# ``cec2013lsgo_registry``; on older installs its cases skip.
+_NEEDS_LSGO = (
+    pytest.mark.skipif(
+        not hasattr(bbob_jax, "cec2013lsgo_registry"),
+        reason="installed bbob-jax predates the CEC 2013 LSGO suite",
+    ),
+)
+
 
 TASK_CASES: list[TaskCase] = [
     # Analytical, cheap, deterministic -- the strongest correctness checks.
@@ -409,6 +432,28 @@ TASK_CASES: list[TaskCase] = [
         _cec2017("cec2017_f17", dimensionality=5),
         domain="unit",
         gmin_is_lower_bound=True,
+    ),
+    # CEC 2013 LSGO: fixed-instance suite (native 1000-D). Its analytical
+    # optimum 0 is always a genuine lower bound (non-negative objective),
+    # even for F14 whose conflicting overlap makes 0 unattained.
+    TaskCase(
+        "cec2013lsgo-f1",
+        "create_cec2013lsgo_task",
+        _cec2013lsgo("cec2013lsgo_f1"),
+        domain="unit",
+        gmin_is_lower_bound=True,
+        marks=_NEEDS_LSGO + _SLOW,
+    ),
+    # UAV terrain path-planning: procedural terrain baked into a
+    # differentiable objective; empirical global_min (not a guaranteed
+    # lower bound). Slow: synthesises a terrain and benchmarks the optimum.
+    TaskCase(
+        "uav",
+        "create_uav_task",
+        _uav,
+        domain="unit",
+        gmin_is_lower_bound=False,
+        marks=_SLOW,
     ),
     # Randomly-embedded BBOB: low intrinsic dimension inside a larger
     # ambient space. The optimum is attained exactly at the seeded

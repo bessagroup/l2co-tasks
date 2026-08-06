@@ -38,6 +38,10 @@ create_cec2005_task
 create_cec2017_task
     Same, for a CEC2017 function (names ``cec2017_f1``,
     ``cec2017_f3`` ... ``cec2017_f30``; F2 was officially withdrawn).
+create_cec2013lsgo_task
+    Same, for a CEC 2013 LSGO function (names ``cec2013lsgo_f1`` ...
+    ``cec2013lsgo_f15``). Fixed-instance suite: no ``seed``/``noise``
+    effect, fixed native dimension, ``global_min = 0``.
 CEC2019Sampler
     ``f3dasm.Block`` that enumerates the CEC-2019 suite, mapping each
     function name to its fixed dimensionality.
@@ -496,6 +500,103 @@ def create_cec2017_task(
         model=model,
         global_min=float(problem.f_opt),
         pass_rng=pass_rng,
+        loss_fn=loss_fn,
+        tag=tag,
+    )
+
+
+# CEC 2013 LSGO is a fixed-instance suite: each function is defined only at
+# its native dimension (1000, or 905 for the overlapping F13/F14).
+_LSGO_NATIVE_DIM: dict[str, int] = {
+    "cec2013lsgo_f13": 905,
+    "cec2013lsgo_f14": 905,
+}
+
+
+def create_cec2013lsgo_task(
+    fn_name: str, seed: int = 0, dimensionality: int | None = None
+) -> Task:
+    """Create an optimization task from a CEC 2013 LSGO function.
+
+    The CEC 2013 Large-Scale Global Optimization suite
+    (``cec2013lsgo_f1`` ... ``cec2013lsgo_f15``) is a **fixed-instance**
+    suite in ``bbob_jax``: its parameters are the official constants, not
+    seeded, and each function is defined only at its native dimension. The
+    ``seed`` is recorded for identity but does not change the instance, and
+    there is no ``noise`` knob (adding noise would break the analytical
+    floor below).
+
+    Parameters
+    ----------
+    fn_name : str
+        Name of the CEC 2013 LSGO function (``"cec2013lsgo_f1"`` ...
+        ``"cec2013lsgo_f15"``).
+    seed : int, optional
+        Recorded in ``tag`` for identity; ignored by the deterministic
+        LSGO instance. Default 0.
+    dimensionality : int or None, optional
+        Problem dimensionality. Must equal the function's native dimension
+        (1000, or 905 for F13/F14). When ``None`` (default) the native
+        dimension is used automatically.
+
+    Returns
+    -------
+    Task
+        Configured task (``pass_rng=False``). ``global_min`` is the
+        analytical optimum ``0.0`` - a genuine lower bound (floor) for
+        every function. It is *attained* at the optimum for all functions
+        **except F14**, whose conflicting-overlap subcomponents cannot be
+        simultaneously zeroed; ``tag["optimum_attained"]`` records this.
+
+    Raises
+    ------
+    ImportError
+        If the installed ``bbob-jax`` predates the CEC 2013 LSGO suite
+        (no ``cec2013lsgo_registry``). Upgrade bbob-jax.
+    ValueError
+        If ``dimensionality`` does not equal the function's native
+        dimension (raised by the ``bbob_jax`` maker).
+
+    Notes
+    -----
+    Input domain is ``[0, 1]^d`` scaled to the function's native bounds
+    (``[-100, 100]``, ``[-5, 5]`` for the Rastrigin-based F2/F5/F9, or
+    ``[-32, 32]`` for the Ackley-based F3/F6/F10).
+    """
+    bounds = getattr(bbob_jax, "cec2013lsgo_bounds", None)
+    if bounds is None:
+        raise ImportError(
+            "create_cec2013lsgo_task requires a bbob-jax with the CEC 2013 "
+            "LSGO suite (cec2013lsgo_registry); older releases do not "
+            "include it. Upgrade bbob-jax."
+        )
+
+    if dimensionality is None:
+        dimensionality = _LSGO_NATIVE_DIM.get(fn_name, 1000)
+
+    fn_scale_input = scale_input(
+        domain_bounds=jnp.tile(jnp.array([0.0, 1.0]), (dimensionality, 1)),
+        function_bounds=jnp.tile(
+            jnp.array(bounds[fn_name]), (dimensionality, 1)
+        ),
+    )
+
+    # Fixed instance: problem() validates ndim and ignores the key.
+    problem = bbob_jax.problem(fn_name, ndim=dimensionality, key=jr.key(seed))
+
+    loss_fn = fn_scale_input(problem.fn)
+    model = jnp.zeros(dimensionality)
+    tag = dict(problem.tags)
+    tag["min_ndim"] = problem.min_ndim
+    tag["dimensionality"] = dimensionality
+    tag["fn_name"] = fn_name
+    tag["seed"] = seed
+    tag["optimum_attained"] = fn_name != "cec2013lsgo_f14"
+
+    return Task(
+        model=model,
+        global_min=float(problem.f_opt),
+        pass_rng=False,
         loss_fn=loss_fn,
         tag=tag,
     )

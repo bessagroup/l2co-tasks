@@ -67,6 +67,8 @@ Every task is built by a `create_<name>_task(...)` factory and returned as a sin
 | Black-box | Embedded BBOB | `create_embedded_bbob_task` | analytical | BBOB function hidden in a higher-dimensional space via a random orthonormal embedding; rank-`d` Hessian outliers plus a flat or `bulk_scale`-curved null space, mimicking neural-network loss landscapes. | Li et al. (2018), Wang et al. (2016) |
 | Black-box | CEC 2005 | `create_cec2005_task` | analytical | CEC 2005 real-parameter functions with per-function bounds; `f4/f17/f24/f25` are stochastic. | [bbob-jax](https://github.com/bessagroup/bbob-jax) |
 | Black-box | CEC 2017 | `create_cec2017_task` | analytical | CEC 2017 bound-constrained functions (`cec2017_f1`, `cec2017_f3` ... `cec2017_f30`); hybrids need a minimum dimensionality (`tag["min_ndim"]`). | [bbob-jax](https://github.com/bessagroup/bbob-jax) |
+| Black-box | CEC 2013 LSGO | `create_cec2013lsgo_task` | analytical | 15 large-scale functions (`cec2013lsgo_f1` ... `cec2013lsgo_f15`); fixed-instance suite at native dimension (1000, or 905 for the overlapping F13/F14). `global_min = 0` is a genuine floor for all; F14's conflicting overlap makes it unattained (`tag["optimum_attained"]`). Needs a bbob-jax with the LSGO suite. | [bbob-jax](https://github.com/bessagroup/bbob-jax), Li et al. (2013) |
+| Real-world | UAV path planning | `create_uav_task` | empirical | Choose `n` 3-D waypoints (spherical increments) for a drone over a synthetic terrain; weighted path-length / threat / altitude / smoothness / clearance cost. Terrain synthesised at build time and baked into a differentiable objective (`d = 3n`, default 30-D). | [MetaBox](https://github.com/MetaEvo/MetaBox); [arXiv:2501.14503](https://arxiv.org/abs/2501.14503) |
 | Least-squares | Random quadratic | `create_quadratic_task` | analytical | Minimize `\|\|W x - y\|\|^2` for random Gaussian `W`, `y` (square or over-determined). | Maheswaranathan et al. (2019) |
 | Supervised | Two-spiral | `create_spiral_task` | empirical | GRU-RNN trained with MSE to separate two interleaved spirals. | — |
 | Supervised | MNIST-1D | `create_mnist1d_task` | empirical | MLP softmax classifier on the 1-D MNIST surrogate dataset. | [Greydanus (2020)](https://github.com/greydanus/mnist1d) |
@@ -116,6 +118,30 @@ Two runnable notebooks demonstrate and benchmark the core functionality end-to-e
 ## Community Support
 
 If you find any **issues, bugs or problems** with this package, please use the [GitHub issue tracker](https://github.com/bessagroup/l2co-tasks/issues) to report them.
+
+## Acknowledgements & third-party components
+
+The **UAV** path-planning task (`create_uav_task`) was ported to JAX from
+[MetaBox](https://github.com/MetaEvo/MetaBox)'s NumPy implementation
+(`MetaEvo/MetaBox@5565a28`, BSD 3-Clause, © 2023 MetaEvolution Lab); the
+underlying benchmark is *Benchmarking global optimization techniques for
+unmanned aerial vehicle path planning* ([arXiv:2501.14503](https://arxiv.org/abs/2501.14503),
+2025; data at [Zenodo 12793991](https://zenodo.org/records/12793991)). The
+**CEC 2013 LSGO** tasks (`create_cec2013lsgo_task`) wrap the suite provided
+by [`bbob-jax`](https://github.com/bessagroup/bbob-jax) (itself ported from
+MetaBox / `dmolina/cec2013lsgo`; original benchmark Li et al., 2013). Full
+notices are in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
+```bibtex
+@inproceedings{Ma2023MetaBox,
+  title     = {MetaBox: A Benchmark Platform for Meta-Black-Box Optimization
+               with Reinforcement Learning},
+  author    = {Ma, Zeyuan and others},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2023},
+  note      = {arXiv:2311.02708},
+}
+```
 
 ## License
 
