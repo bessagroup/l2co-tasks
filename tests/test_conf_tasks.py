@@ -34,6 +34,9 @@ _NEEDS_BBOB_NOISY = {
     "bbob_noisy",
     "bbob_balanced_train",
     "bbob_balanced_test",
+    "bbob_headroom_train",
+    "bbob_headroom_test",
+    "bbob_headroom_toy",
 }
 _HAS_BBOB_NOISY = hasattr(bbob_jax, "bbob_noisy_registry")
 

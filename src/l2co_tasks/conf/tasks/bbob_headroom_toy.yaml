@@ -1,0 +1,101 @@
+# bbob_headroom_toy — 10-task toy subset of `bbob_headroom_train`.
+#
+# For fast iteration when training an RL policy: small enough that a run
+# finishes in minutes, while keeping the property that makes the parent worth
+# training on — the `headroom4` quartet is individually balanced on it, and the
+# per-task oracle over the quartet sits far above every fixed single optimizer.
+# It is a benchmark for the training loop, not a benchmark for the method;
+# report results on `bbob_headroom_train` / `_test`.
+#
+# 10 tasks (bbob: 2, bbob_embedded: 4, bbob_noisy: 4) drawn from 10 distinct BBOB functions,
+# one task each. Selected as a subset of the parent's 100 rows by the
+# parent's MILP with the same quartet and the same
+#   * balance   : per-optimizer level spread <= 0.02
+#   * usefulness: VBS >= level_o + 0.02 for EVERY databank schedule
+#   * coverage  : >= 2 tasks from each suite
+# plus three constraints the parent does not need at N=100
+#   * action space  : each of the 4 is the per-task oracle winner on
+#                     >= 2 tasks, so no quarter of the action space
+#                     is ignorable
+#   * function space: <= 1 task per function, so a policy
+#                     cannot memorise a handful of landscapes
+#   * compute       : no task above d=64. Per-cell cost rises
+#                     ~linearly with d for the population methods, and the
+#                     iteration budget is already capped at 25000 above
+#                     d=25 -- so d alone separates a cheap task from an
+#                     expensive one.
+#
+# Predicted grid cost 34 min over the 4 schedules, against
+# 1443 min for the parent's 100 tasks, and
+# 279 min for the uncapped 10-task selection this replaces:
+# 8.2x cheaper, for 9% less headroom gap.
+# Cost model and its ~1.7x accuracy: docs/plans/headroom_toy_cost.py.
+#
+# Schedules: lbfgs, rprop_learning_rate=0.001, crfmnes, mr15ga
+# (pool ranks [1, 2, 3, 8] of 52; 2 gradient-based, 2 derivative-free)
+#
+# Achieved: level=0.2878 spread=0.0200 VBS=0.6238 gap=0.3360;
+# SBS=lbfgs 0.2963 -> VBS-SBS=+0.3275.
+# Per-optimizer levels: {'lbfgs': 0.2963, 'rprop_learning_rate=0.001': 0.2938, 'crfmnes': 0.2849, 'mr15ga': 0.2763}.
+# Per-optimizer oracle wins: {'lbfgs': 2, 'rprop_learning_rate=0.001': 3, 'crfmnes': 2, 'mr15ga': 3}.
+# (The gap is larger than the parent's 0.2891: picking the
+# 10 highest-headroom of 100 tasks is an easier problem than
+# balancing all 100.)
+#
+# Functions are a subset of the parent's train half, so they stay disjoint from
+# `bbob_headroom_test`, which remains a valid held-out check. Selection method
+# and provenance: docs/plans/headroom-dataset.md and
+# docs/plans/headroom_toy_select.py in l2co_experiments.
+#
+# Composite config: `parts` lists one task factory per suite, each with
+# explicit input_data rows (consumed verbatim). The parts-aware
+# create_experimentdata builds each part and row-concatenates the tasks.
+sampler:
+  _target_: f3dasm.create_sampler
+  sampler: "random"  # identity: n_samples=0 appends no rows
+sampler_kwargs:
+  n_samples: 0
+
+parts:
+  # bbob: 2 tasks
+  - data_generator:
+      _target_: l2co_tasks.create_bbob_task
+      _partial_: True
+    task_kwargs:
+    input_data:
+      - {fn_name: rastrigin, dimensionality: 2, seed: 0}
+      - {fn_name: sharp_ridge, dimensionality: 3, seed: 0}
+  # bbob_embedded: 4 tasks
+  - data_generator:
+      _target_: l2co_tasks.create_embedded_bbob_task
+      _partial_: True
+    task_kwargs:
+      bulk_scale: 0.0
+    input_data:
+      - {fn_name: katsuura, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
+      - {fn_name: rastrigin_seperable, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
+      - {fn_name: step_ellipsoid, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
+  # bbob_noisy: 4 tasks
+  - data_generator:
+      _target_: l2co_tasks.create_bbob_noisy_task
+      _partial_: True
+    task_kwargs:
+    input_data:
+      - {fn_name: bbob_noisy_f108, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f118, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f119, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f120, dimensionality: 40, seed: 0}
+
+schema:
+  dimensionality: continuous
+  separable: boolean
+  unimodal: boolean
+  # Derived (l2co.features.DERIVED_FEATURES) from the `noise` tag rather
+  # than stored in it, so every task hash -- and every databank taskID --
+  # is unchanged and no trajectory is re-run. False for exactly the 4
+  # bbob_noisy tasks of this set, True for the 2 bbob +
+  # 4 embedded.
+  deterministic: boolean
+
+bounded:
