@@ -40,6 +40,11 @@ _NEEDS_BBOB_NOISY = {
 }
 _HAS_BBOB_NOISY = hasattr(bbob_jax, "bbob_noisy_registry")
 
+# Configs whose data generator needs the CEC 2013 LSGO suite, which ships
+# with bbob-jax releases newer than 2.0.0; on older installs they skip.
+_NEEDS_LSGO = {"cec2013lsgo"}
+_HAS_LSGO = hasattr(bbob_jax, "cec2013lsgo_registry")
+
 # OmegaConf overlays merged on top of each raw YAML before sampling.
 # Goals:
 #   * cap heavy grids to a handful of tasks (bbob / bbob2 / cec2005);
@@ -50,6 +55,32 @@ _HAS_BBOB_NOISY = hasattr(bbob_jax, "bbob_noisy_registry")
 # bbob_single, cec2005_small, pde) appear here only when an overlay is
 # strictly needed.
 _OVERLAYS: dict[str, dict] = {
+    # LSGO rows are 1000-D (905-D for f13/f14) and cannot be shrunk --
+    # the suite is defined only at those dimensionalities -- so trim the
+    # 15 rows to 3 instead. Keeps one 905-D row so the wiring that makes
+    # this config unusual (a different dimensionality per function) is
+    # still exercised. OmegaConf replaces lists wholesale on merge.
+    "cec2013lsgo": {
+        "experimentdata": {
+            "input_data": [
+                {
+                    "fn_name": "cec2013lsgo_f3",
+                    "dimensionality": 1000,
+                    "seed": 0,
+                },
+                {
+                    "fn_name": "cec2013lsgo_f4",
+                    "dimensionality": 1000,
+                    "seed": 0,
+                },
+                {
+                    "fn_name": "cec2013lsgo_f14",
+                    "dimensionality": 905,
+                    "seed": 0,
+                },
+            ]
+        },
+    },
     "bbob": {
         "experimentdata": {
             "domain": {
@@ -341,6 +372,8 @@ def test_sample_task_distribution(
         request.applymarker(pytest.mark.slow)
     if config_name in _NEEDS_BBOB_NOISY and not _HAS_BBOB_NOISY:
         pytest.skip("installed bbob-jax predates the BBOB-noisy suite")
+    if config_name in _NEEDS_LSGO and not _HAS_LSGO:
+        pytest.skip("installed bbob-jax predates the CEC 2013 LSGO suite")
 
     # mnist1d, spirals, gaussian_classification ship relative
     # ``task_kwargs.dataset_path`` strings; PDETaskSampler likewise

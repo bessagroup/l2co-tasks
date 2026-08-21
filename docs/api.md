@@ -46,6 +46,8 @@ loss landscapes without using a neural network.
 
 ::: l2co_tasks.create_cec2017_task
 
+::: l2co_tasks.create_cec2013lsgo_task
+
 ## Quadratic least-squares
 
 ::: l2co_tasks.create_quadratic_task

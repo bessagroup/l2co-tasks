@@ -1,0 +1,127 @@
+# Full CEC 2013 Large-Scale Global Optimization suite
+# (create_cec2013lsgo_task): 15 functions x 1 dimensionality x 1 seed
+# = 15 tasks. Four separability classes in the Li et al. 2013 grouping:
+# fully separable (f1-f3), partially separable (f4-f11), overlapping
+# (f12-f14) and fully non-separable (f15).
+# Requires bbob-jax >= 2.1.0 (the release that ships the LSGO suite).
+#
+# This suite behaves differently from every other one shipped here, in
+# three ways that shape the config below.
+#
+# 1. Fixed instance. The shift / rotation / permutation / weight
+#    parameters are official competition constants, not sampled from a
+#    key, so `seed` selects no instance: every seed yields the same
+#    landscape. There is therefore a single `seed: 0` row per function
+#    and no instance axis to multiply the pool by (contrast bbob.yaml's
+#    4 seeds). 15 functions is the entire suite. Rollout repeats remain
+#    a separate axis (`n_realizations`).
+#
+# 2. One dimensionality per function. Each function is defined only at
+#    its native dimensionality -- 1000, except the overlapping f13/f14
+#    at 905 -- and the factory raises ValueError anywhere else. The
+#    `grid` sampler would take the cross-product of
+#    `fn_name x dimensionality` and produce 30 rows, 28 of them
+#    invalid, so the tasks are listed explicitly as `input_data` rows
+#    consumed verbatim and the sampler below is a no-op
+#    (`random` at `n_samples: 0` appends nothing).
+#
+# 3. Large scale, by construction. At 1000-D these tasks are one to two
+#    orders of magnitude wider than anything in the bbob configs (the
+#    headroom sets cap at d=64 on cost grounds). Budget accordingly:
+#    this is an out-of-distribution generalization / scaling suite, not
+#    a training set you can iterate on cheaply.
+#
+# `global_min` is 0.0 for all 15 and is a genuine lower bound in every
+# case, but two members never attain it: f12's Rosenbrock optimum sits
+# at `xopt + 1`, and f14's conflicting overlap makes 0 unreachable.
+# Success thresholds defined relative to `global_min` will never fire
+# on those two -- read them as anytime-quality tasks instead.
+sampler:
+  _target_: f3dasm.create_sampler
+  sampler: "random"  # identity: n_samples=0 appends no rows
+sampler_kwargs:
+  n_samples: 0
+
+experimentdata:
+  # One row per task. `dimensionality` is the function's native
+  # dimensionality, not a shared category -- see note 2 above.
+  input_data:
+    # Fully separable (f1-f3)
+    - fn_name: 'cec2013lsgo_f1'    # shifted elliptic, 1e6 conditioning
+      dimensionality: 1000
+      seed: 0
+    - fn_name: 'cec2013lsgo_f2'    # shifted Rastrigin
+      dimensionality: 1000
+      seed: 0
+    - fn_name: 'cec2013lsgo_f3'    # shifted Ackley
+      dimensionality: 1000
+      seed: 0
+    # Partially separable: f4-f7 = 7 rotated subcomponents + a separable
+    # remainder; f8-f11 = 20 rotated subcomponents, no remainder
+    - fn_name: 'cec2013lsgo_f4'    # elliptic blocks + remainder
+      dimensionality: 1000
+      seed: 0
+    - fn_name: 'cec2013lsgo_f5'    # Rastrigin blocks + remainder
+      dimensionality: 1000
+      seed: 0
+    - fn_name: 'cec2013lsgo_f6'    # Ackley blocks + remainder
+      dimensionality: 1000
+      seed: 0
+    - fn_name: 'cec2013lsgo_f7'    # Schwefel 1.2 blocks + remainder
+      dimensionality: 1000
+      seed: 0
+    - fn_name: 'cec2013lsgo_f8'    # elliptic, 20 rotated blocks
+      dimensionality: 1000
+      seed: 0
+    - fn_name: 'cec2013lsgo_f9'    # Rastrigin, 20 rotated blocks
+      dimensionality: 1000
+      seed: 0
+    - fn_name: 'cec2013lsgo_f10'   # Ackley, 20 rotated blocks
+      dimensionality: 1000
+      seed: 0
+    - fn_name: 'cec2013lsgo_f11'   # Schwefel 1.2, 20 rotated blocks
+      dimensionality: 1000
+      seed: 0
+    # Overlapping (f12-f14); f13/f14 are 905-D, not 1000-D
+    - fn_name: 'cec2013lsgo_f12'   # shifted Rosenbrock, intrinsic overlap
+      dimensionality: 1000
+      seed: 0
+    - fn_name: 'cec2013lsgo_f13'   # Schwefel 1.2, conforming overlap
+      dimensionality: 905
+      seed: 0
+    - fn_name: 'cec2013lsgo_f14'   # Schwefel 1.2, conflicting overlap
+      dimensionality: 905
+      seed: 0
+    # Fully non-separable (f15)
+    - fn_name: 'cec2013lsgo_f15'   # Schwefel 1.2 over all 1000 dimensions
+      dimensionality: 1000
+      seed: 0
+
+task_kwargs:  # Extra keyword args forwarded to the task factory (null = none)
+
+data_generator:
+  # Factory function that creates a Task object from each ExperimentData row
+  _target_: l2co_tasks.create_cec2013lsgo_task
+  _partial_: True
+
+schema:
+  # Feature schema used by FeatureProcessor to encode task metadata for
+  # the model. This suite tags separability as a 4-way split (exactly
+  # one of the four flags is True) plus `rotated`, which is a *different*
+  # vocabulary from the bbob configs' `separable` / `unimodal` pair.
+  #
+  # Consequence: these tasks are NOT drop-in for a policy trained on
+  # bbob.yaml. `FeatureProcessor.transform` raises KeyError for any
+  # schema feature absent from the task tag, and LSGO tags carry no
+  # `unimodal` key. Evaluating a bbob-trained policy here needs a
+  # schema bridge (or a policy trained on this schema); it is not a
+  # matter of reusing the config.
+  dimensionality: continuous
+  separable: boolean
+  partially_separable: boolean
+  overlapping: boolean
+  non_separable: boolean
+  rotated: boolean
+
+# [lower, upper] for bounded tasks, omit (or null) for unbounded.
+bounded:

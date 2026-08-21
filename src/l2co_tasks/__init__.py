@@ -11,6 +11,7 @@ from ._src.benchmark_task import (
     create_bbob_noisy_task,
     create_bbob_task,
     create_cec2005_task,
+    create_cec2013lsgo_task,
     create_cec2017_task,
 )
 from ._src.continue_from_path import retrieve_tasks
@@ -59,6 +60,7 @@ __all__ = [
     "create_bbob_noisy_task",
     "create_bbob_task",
     "create_cec2005_task",
+    "create_cec2013lsgo_task",
     "create_cec2017_task",
     "create_embedded_bbob_task",
     "create_euler_task",
