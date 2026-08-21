@@ -1,9 +1,11 @@
 """Tests for ``create_bbob_task``, ``create_bbob_noisy_task``,
-``create_cec2005_task``, ``create_cec2017_task`` and ``CEC2019Sampler``.
+``create_cec2005_task``, ``create_cec2017_task``,
+``create_cec2013lsgo_task`` and ``CEC2019Sampler``.
 
 These factories are pure (no dataset files) so the tests run quickly and
 do not need the ``slow`` marker. The BBOB-noisy tests skip on bbob-jax
-installs that predate the suite (releases up to 1.8.0).
+installs that predate the suite (releases up to 1.8.0); the CEC 2013
+LSGO tests likewise skip on installs up to 2.0.0.
 """
 
 from __future__ import annotations
@@ -22,6 +24,7 @@ from l2co_tasks import (
     create_bbob_noisy_task,
     create_bbob_task,
     create_cec2005_task,
+    create_cec2013lsgo_task,
     create_cec2017_task,
 )
 
@@ -30,6 +33,16 @@ needs_bbob_noisy = pytest.mark.skipif(
     not _HAS_BBOB_NOISY,
     reason="installed bbob-jax predates the BBOB-noisy suite",
 )
+
+_HAS_LSGO = hasattr(bbob_jax, "cec2013lsgo_registry")
+needs_lsgo = pytest.mark.skipif(
+    not _HAS_LSGO,
+    reason="installed bbob-jax predates the CEC 2013 LSGO suite",
+)
+
+# Native dimensionality per LSGO function: 1000, except the overlapping
+# f13/f14 at 905.
+_LSGO_NDIM = {"cec2013lsgo_f3": 1000, "cec2013lsgo_f13": 905}
 
 
 @pytest.mark.parametrize("fn_name", ["sphere", "rastrigin", "rosenbrock"])
@@ -123,6 +136,114 @@ def test_create_bbob_noisy_task_old_bbob_jax_raises(monkeypatch):
     with pytest.raises(ImportError, match="bbob-jax"):
         create_bbob_noisy_task(
             fn_name="bbob_noisy_f101", seed=0, dimensionality=3
+        )
+
+
+@needs_lsgo
+@pytest.mark.parametrize("fn_name", ["cec2013lsgo_f3", "cec2013lsgo_f13"])
+def test_create_cec2013lsgo_task(fn_name, eqx_path):
+    """LSGO tasks build at their native dimensionality, are
+    deterministic, expose the 4-way separability tags and round-trip.
+
+    ``f3`` is 1000-D and fully separable; ``f13`` is one of the two
+    905-D overlapping members, so the pair covers both native
+    dimensionalities.
+    """
+    ndim = _LSGO_NDIM[fn_name]
+    task = create_cec2013lsgo_task(
+        fn_name=fn_name, seed=0, dimensionality=ndim
+    )
+    assert isinstance(task, Task)
+    assert task.dimensionality == ndim
+    assert task.pass_rng is False
+    assert task.tag["fn_name"] == fn_name
+    assert task.tag["seed"] == 0
+    assert task.tag["noise"] == 0.0
+    assert task.tag["dimensionality"] == ndim
+    # For a fixed-instance suite min_ndim *is* the native dimension.
+    assert task.tag["min_ndim"] == ndim
+    # Exactly one of the four separability classes is set.
+    classes = (
+        "separable",
+        "partially_separable",
+        "overlapping",
+        "non_separable",
+    )
+    assert sum(bool(task.tag[c]) for c in classes) == 1
+    assert task.global_min == 0.0
+
+    loss = float(task.loss_fn(task.model))
+    assert jnp.isfinite(loss)
+    # global_min is a true lower bound for every member of the suite.
+    assert loss >= task.global_min
+
+    saved = Task.save(task, str(eqx_path))
+    loaded = Task.load(saved)
+    assert loaded == task
+    assert loaded.hash == task.hash
+    assert float(loaded.loss_fn(loaded.model)) == pytest.approx(loss)
+
+
+@needs_lsgo
+def test_create_cec2013lsgo_task_is_seed_independent():
+    """``seed`` selects no instance: the landscape is a fixed constant.
+
+    This is what separates LSGO from every other suite here, so it is
+    asserted rather than left implicit -- two seeds must give the same
+    loss *and* the same task identity.
+    """
+    x = jnp.full(1000, 0.3)
+    t0 = create_cec2013lsgo_task(
+        fn_name="cec2013lsgo_f3", seed=0, dimensionality=1000
+    )
+    t7 = create_cec2013lsgo_task(
+        fn_name="cec2013lsgo_f3", seed=7, dimensionality=1000
+    )
+    assert float(t0.loss_fn(x)) == pytest.approx(float(t7.loss_fn(x)))
+    # ``seed`` still lands in the tag, so identity differs by design.
+    assert t0.tag["seed"] == 0 and t7.tag["seed"] == 7
+
+
+@needs_lsgo
+@pytest.mark.parametrize("bad_ndim", [10, 905])
+def test_create_cec2013lsgo_task_wrong_ndim_raises(bad_ndim):
+    """Off the native dimensionality the factory raises, rather than
+    silently rescaling a fixed instance (905 is valid for f13/f14 but
+    not for f3)."""
+    with pytest.raises(ValueError, match="ndim == 1000"):
+        create_cec2013lsgo_task(
+            fn_name="cec2013lsgo_f3", seed=0, dimensionality=bad_ndim
+        )
+
+
+@needs_lsgo
+def test_create_cec2013lsgo_task_with_noise_requires_key():
+    """``noise > 0`` flips ``pass_rng=True`` and the loss consumes a key."""
+    task = create_cec2013lsgo_task(
+        fn_name="cec2013lsgo_f3", seed=0, dimensionality=1000, noise=0.1
+    )
+    assert task.pass_rng is True
+    x = jnp.full(1000, 0.3)
+    l1 = float(task.loss_fn(x, jr.key(0)))
+    l2 = float(task.loss_fn(x, jr.key(1)))
+    assert jnp.isfinite(l1) and jnp.isfinite(l2)
+    assert l1 != l2
+
+
+@needs_lsgo
+def test_create_cec2013lsgo_task_unknown_name_raises():
+    """Other suites' names are not LSGO functions."""
+    with pytest.raises(KeyError):
+        create_cec2013lsgo_task(fn_name="sphere", seed=0, dimensionality=1000)
+
+
+def test_create_cec2013lsgo_task_old_bbob_jax_raises(monkeypatch):
+    """Without the LSGO registry the factory fails with a clear upgrade
+    message instead of a KeyError from ``problem()``."""
+    monkeypatch.delattr(bbob_jax, "cec2013lsgo_registry", raising=False)
+    with pytest.raises(ImportError, match="bbob-jax"):
+        create_cec2013lsgo_task(
+            fn_name="cec2013lsgo_f3", seed=0, dimensionality=1000
         )
 
 

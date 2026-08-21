@@ -40,6 +40,7 @@ an estimator bug shows up as a breach here rather than being reproduced.
 
 from __future__ import annotations
 
+import bbob_jax
 import equinox as eqx
 import jax
 import jax.numpy as jnp
@@ -61,6 +62,19 @@ ANALYTICAL_SAMPLE_IDS = [
     "bbob-rastrigin",
     "cec2005-f1",
     "cec2017-f1",
+    # LSGO reads its bounds off ``problem.bounds`` rather than a bounds
+    # dict, so it is a distinct affine-map path and earns its own
+    # tripwire -- and it is the only suite here with per-function bounds
+    # that are neither [-5, 5] nor [-100, 100] (f3 is on [-32, 32]).
+    # Parametrized with its own skipif: these lists are id strings, so
+    # the mark on the TaskCase itself does not reach this test.
+    pytest.param(
+        "cec2013lsgo-f3",
+        marks=pytest.mark.skipif(
+            not hasattr(bbob_jax, "cec2013lsgo_registry"),
+            reason="installed bbob-jax predates the CEC 2013 LSGO suite",
+        ),
+    ),
 ]
 # Theoretical sample: residual-MSE >= 0, so global_min = 0 is unbreakable.
 THEORETICAL_SAMPLE_IDS = ["pde-convection", "helmholtz-2d", "viscous-burgers"]
