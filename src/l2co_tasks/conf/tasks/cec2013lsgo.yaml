@@ -3,7 +3,7 @@
 # = 15 tasks. Four separability classes in the Li et al. 2013 grouping:
 # fully separable (f1-f3), partially separable (f4-f11), overlapping
 # (f12-f14) and fully non-separable (f15).
-# Requires a bbob-jax release newer than 2.0.0 (CEC 2013 LSGO suite).
+# Requires bbob-jax >= 2.1.0 (the release that ships the LSGO suite).
 #
 # This suite behaves differently from every other one shipped here, in
 # three ways that shape the config below.

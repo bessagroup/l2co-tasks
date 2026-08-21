@@ -25,8 +25,8 @@ are official constants rather than seed-sampled, so ``seed`` selects no
 instance (it only seeds the optional noise), and each function is
 defined at exactly one dimensionality -- 1000, or 905 for the
 overlapping ``f13`` / ``f14``. ``create_cec2013lsgo_task`` propagates
-``bbob_jax``'s ``ValueError`` off that native dimensionality. Like the
-BBOB-noisy factory it requires a bbob-jax newer than 2.0.0.
+``bbob_jax``'s ``ValueError`` off that native dimensionality. The
+suite ships with bbob-jax 2.1.0, which is the package's floor.
 
 Some CEC2017 functions are only defined from a minimum dimensionality
 upward (the hybrids need one dimension per subcomponent kernel);
