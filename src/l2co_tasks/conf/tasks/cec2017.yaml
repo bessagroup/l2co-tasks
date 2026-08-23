@@ -1,0 +1,140 @@
+# Full CEC 2017 single-objective suite (create_cec2017_task):
+# 29 functions x 3 dimensionalities x 1 seed = 87 tasks.
+#
+# F2 IS ABSENT BY DESIGN, not by omission. It was officially withdrawn
+# from the suite (its Bent Cigar / Rosenbrock composition proved
+# numerically unstable across implementations), so the functions run
+# f1, f3, f4 ... f30 and `bbob_jax.bounds.cec2017_bounds` has no `f2`
+# key. Listing it would fail at task construction, not at compose time.
+#
+# The `schema` below encodes the suite's landscape flags. Note these
+# do NOT partition the suite the way the competition's group headings
+# suggest -- verified by encoding every function's tag:
+#   unimodal      f1, f3                    (2)
+#   multimodal    f4-f30                    (27 -- every non-unimodal
+#                                            function, so the hybrids
+#                                            and compositions carry it
+#                                            too, not just the "simple
+#                                            multimodal" f4-f10 group)
+#   hybrid        f11-f20                   (10; subcomponents evaluated
+#                                            on permuted variable chunks)
+#   composition   f21-f30                   (10; weighted sums of
+#                                            shifted, rotated basins)
+# So `unimodal`/`multimodal` is the binary split and `hybrid`/
+# `composition` refine the multimodal side; a model sees the official
+# f4-f10 "simple multimodal" group as multimodal with both structural
+# flags false.
+#
+# NAME PREFIX. Unlike cec2005.yaml, whose bounds table is keyed by bare
+# `f1`..`f25`, this suite's factory looks up
+# `bbob_jax.bounds.cec2017_bounds['cec2017_fN']` -- the names below must
+# carry the `cec2017_` prefix or the task factory raises KeyError. Same
+# convention as cec2013lsgo.yaml.
+#
+# DIMENSIONALITY. The official competition sizes are 10, 30, 50 and 100;
+# the first three are listed here, matching cec2005.yaml so the two
+# suites stay directly comparable. Add 100 if you want the full sweep --
+# but note the budget scales with dimensionality under
+# `budgets=based_on_dim`, so 100-D roughly doubles the cost of the 50-D
+# rows it would join.
+#
+# Every function is valid at all three sizes: `min_ndim` peaks at 7
+# (the hybrids need one dimension per subcomponent kernel; f29/f30 need
+# 5, f6 needs 2), which the smallest listed size clears. Going below 10
+# would start raising ValueError from the bbob-jax maker, function by
+# function -- which is why the grid here starts at 10 rather than at the
+# d=2 the bbob configs use.
+#
+# SINGLE INSTANCE. Unlike cec2013lsgo, this suite *does* sample its
+# shift/rotation parameters from the key, so `seed` genuinely selects an
+# instance. One seed is listed anyway, mirroring cec2005.yaml, so the
+# pool stays at 87 tasks; widen the `seed` range (as bbob.yaml does with
+# 4 seeds) if you want an instance axis. Rollout repeats stay a separate
+# axis (`n_realizations`).
+sampler:
+  _target_: f3dasm.create_sampler
+  sampler: "grid"
+sampler_kwargs:
+
+experimentdata:
+  domain:
+    input:
+      # f1, f3..f30 -- see the note above on the withdrawn f2.
+      fn_name:
+        type: category
+        categories:
+          # Unimodal
+          - 'cec2017_f1'
+          - 'cec2017_f3'
+          # Simple multimodal
+          - 'cec2017_f4'
+          - 'cec2017_f5'
+          - 'cec2017_f6'
+          - 'cec2017_f7'
+          - 'cec2017_f8'
+          - 'cec2017_f9'
+          - 'cec2017_f10'
+          # Hybrid
+          - 'cec2017_f11'
+          - 'cec2017_f12'
+          - 'cec2017_f13'
+          - 'cec2017_f14'
+          - 'cec2017_f15'
+          - 'cec2017_f16'
+          - 'cec2017_f17'
+          - 'cec2017_f18'
+          - 'cec2017_f19'
+          - 'cec2017_f20'
+          # Composition
+          - 'cec2017_f21'
+          - 'cec2017_f22'
+          - 'cec2017_f23'
+          - 'cec2017_f24'
+          - 'cec2017_f25'
+          - 'cec2017_f26'
+          - 'cec2017_f27'
+          - 'cec2017_f28'
+          - 'cec2017_f29'
+          - 'cec2017_f30'
+      dimensionality:
+        type: category
+        categories:
+          - 10
+          - 30
+          - 50
+      seed:
+        type: int
+        low: 0
+        high: 0
+
+task_kwargs:  # Extra keyword args forwarded to the task factory (null = none)
+
+data_generator:
+  # Factory function that creates a Task object from each ExperimentData row
+  _target_: l2co_tasks.create_cec2017_task
+  _partial_: True
+
+schema:
+  # Feature schema used by FeatureProcessor to encode task metadata for
+  # the model. These are the suite's own four landscape classes plus
+  # `rotated`, the same curation cec2005.yaml applies to its tags: the
+  # factory also stamps `min_ndim`, `fn_name`, `seed` and `noise`, which
+  # are provenance rather than landscape structure and stay out.
+  #
+  # NO `separable` KEY -- exactly as in cec2005.yaml. A policy trained
+  # against the bbob schema (`separable` / `unimodal`) therefore cannot
+  # be evaluated here as-is: `FeatureProcessor.transform` raises
+  # KeyError on any schema feature absent from the task tag. Either
+  # train against a processor built with `tolerate_missing=True`, which
+  # encodes the absent features as `__absent__`, or use a policy trained
+  # on this schema. Reusing a bbob-trained checkpoint is not a matter of
+  # pointing a config at it.
+  dimensionality: continuous
+  unimodal: boolean
+  multimodal: boolean
+  hybrid: boolean
+  composition: boolean
+  rotated: boolean
+
+# [lower, upper] for bounded tasks, omit (or null) for unbounded.
+bounded:
