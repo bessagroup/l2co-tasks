@@ -97,5 +97,6 @@ nav:
     - 'getting_started.md'
     - Create your own task: 'create_task.ipynb'
     - PINN benchmark tasks: 'pinn_tasks.ipynb'
+    - Embedded BBOB tasks: 'embedded_tasks.md'
     - 'api.md'
     - 'license.md'
