@@ -178,6 +178,15 @@ def estimate_global_min(
     -------
     float
         The lowest loss found -- the estimated global minimum.
+
+    Notes
+    -----
+    Calls :func:`jax.clear_caches` before returning: the estimator's
+    jitted restart functions are per-call closures whose compiled
+    executables would otherwise accumulate in JAX's global compilation
+    cache across a many-task sweep until the CPU ORC JIT exhausts its
+    code memory. Callers should expect their own jitted functions to
+    recompile on first use after this returns.
     """
     n_steps = max(int(n_steps), 1)
     n_restarts = max(int(n_restarts), 1)
@@ -276,7 +285,18 @@ def estimate_global_min(
             best_overall = jnp.minimum(
                 best_overall, run_restart_lbfgs(start, rk)
             )
-    return float(best_overall)
+    result = float(best_overall)
+    # ``run_restart`` / ``run_restart_lbfgs`` are fresh jitted closures
+    # per call, and JAX's global compilation cache keeps their compiled
+    # executables alive even after they go out of scope. Across a
+    # many-task sweep (e.g. ``create_tasks_experimentdata`` over ~100
+    # tasks) those executables accumulate until the CPU ORC JIT runs out
+    # of code memory ("LLVM ERROR: Unable to allocate section memory!").
+    # Estimation is one-shot per task, so drop the caches on the way out;
+    # the recompile cost this imposes on surrounding code is negligible
+    # next to the estimation itself.
+    jax.clear_caches()
+    return result
 
 
 # =============================================================================
