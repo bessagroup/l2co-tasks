@@ -1,0 +1,82 @@
+# Pilot: the BBOB-noisy severe band at high dimension.
+#
+# The suite's two most productive axes have never been crossed.
+# `bbob_noisy` stops at 40D; `bbob_embedded` reaches 1024D but is
+# noise-free. Measured on the 756-task audit matrix, severe noise
+# (f107-f121) yields 0.271 of SBS-VBS gap per task against a pooled
+# 0.147, and the gap rises with ambient dimension (0.100 at 64D to
+# 0.145 at 1024D) -- so the empty (noise x high-dimension) cell is
+# where a third task regime is most likely to sit.
+#
+# The mechanism the pilot tests: noise disables lbfgs (the incumbent
+# SBS), and high dimension disables the full-covariance family (cmaes
+# is already absent at 256D in bbob_embedded, and five optimizers at
+# 1024D). If a regime exists there, it should be held by robust
+# first-order methods -- the family that currently never wins a single
+# task of the 756.
+#
+# Deliberately a SEPARATE store rather than extra rows in bbob_noisy:
+# extending that store would change what `tasks=bbob_noisy` means for
+# every existing analysis, the audit matrix included.
+#
+# 15 functions x 2 dimensionalities x 1 seed = 30 tasks.
+sampler:
+  _target_: f3dasm.create_sampler
+  sampler: "grid"  # one row per (fn_name × dimensionality × seed)
+sampler_kwargs:
+
+experimentdata:
+  domain:
+    input:
+      fn_name:
+        type: category
+        categories:
+          # Severe noise, unimodal base landscapes (f107-f121). The
+          # severe+multimodal band (f122-f130) is excluded on purpose:
+          # it measures a *lower* gap (0.176) than this band despite
+          # being harder, because there the VBS collapses too -- every
+          # optimizer fails, so there is nothing to select between.
+          - 'bbob_noisy_f107'
+          - 'bbob_noisy_f108'
+          - 'bbob_noisy_f109'
+          - 'bbob_noisy_f110'
+          - 'bbob_noisy_f111'
+          - 'bbob_noisy_f112'
+          - 'bbob_noisy_f113'
+          - 'bbob_noisy_f114'
+          - 'bbob_noisy_f115'
+          - 'bbob_noisy_f116'
+          - 'bbob_noisy_f117'
+          - 'bbob_noisy_f118'
+          - 'bbob_noisy_f119'
+          - 'bbob_noisy_f120'
+          - 'bbob_noisy_f121'
+      dimensionality:
+        # Past bbob_noisy's 40D ceiling. 64 is the dimension at which
+        # bbob_embedded still runs the whole portfolio; 256 is where
+        # cmaes drops out, which is half the point of the pilot.
+        type: category
+        categories:
+          - 64
+          - 256
+      seed:
+        # One instance per cell: this is a regime probe, not a
+        # performance measurement.
+        type: int
+        low: 0
+        high: 0
+
+task_kwargs:
+
+data_generator:
+  _target_: l2co_tasks.create_bbob_noisy_task
+  _partial_: True
+
+schema:
+  # Identical to bbob_noisy.yaml so the pilot tasks are drop-in
+  # comparable with the audit matrix.
+  dimensionality: continuous
+  separable: boolean
+  unimodal: boolean
+
+bounded:
