@@ -1,5 +1,5 @@
 # Full CEC 2017 single-objective suite (create_cec2017_task):
-# 29 functions x 3 dimensionalities x 1 seed = 87 tasks.
+# 29 functions x 3 dimensionalities x 4 seeds = 348 tasks.
 #
 # F2 IS ABSENT BY DESIGN, not by omission. It was officially withdrawn
 # from the suite (its Bent Cigar / Rosenbrock composition proved
@@ -45,12 +45,12 @@
 # function -- which is why the grid here starts at 10 rather than at the
 # d=2 the bbob configs use.
 #
-# SINGLE INSTANCE. Unlike cec2013lsgo, this suite *does* sample its
+# FOUR INSTANCES. Unlike cec2013lsgo, this suite *does* sample its
 # shift/rotation parameters from the key, so `seed` genuinely selects an
-# instance. One seed is listed anyway, mirroring cec2005.yaml, so the
-# pool stays at 87 tasks; widen the `seed` range (as bbob.yaml does with
-# 4 seeds) if you want an instance axis. Rollout repeats stay a separate
-# axis (`n_realizations`).
+# instance. Four seeds are listed, matching bbob.yaml and cec2005.yaml;
+# seed 0 is the single instance the suite shipped with before it was
+# widened, so its task hashes are unchanged. Rollout repeats stay a
+# separate axis (`n_realizations`).
 sampler:
   _target_: f3dasm.create_sampler
   sampler: "grid"
@@ -105,7 +105,7 @@ experimentdata:
       seed:
         type: int
         low: 0
-        high: 0
+        high: 3
 
 task_kwargs:  # Extra keyword args forwarded to the task factory (null = none)
 
