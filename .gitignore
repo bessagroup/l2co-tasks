@@ -213,5 +213,6 @@ site/
 
 # Agents
 agent-reports/
+.claude/worktrees/
 
 .vscode/
