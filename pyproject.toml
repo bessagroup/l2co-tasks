@@ -83,7 +83,6 @@ exclude = [
   "__pycache__",
   "dist",
   "*.egg",
-  "tests",
   ".git"
 ]
 ignore = [
@@ -111,6 +110,9 @@ select = [
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401", "E402"]
+# Integration tests import l2co on purpose (pytest.importorskip); the
+# ADR 0018 ban guards the shipped package only.
+"tests/**" = ["TID251"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
