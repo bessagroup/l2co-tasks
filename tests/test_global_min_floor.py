@@ -322,16 +322,17 @@ def test_theoretical_global_min_is_nonnegative_floor(case_id, build_case):
 def test_empirical_global_min_floor_against_all(case_id, build_case):
     """The full ``all`` suite at production budget never breaches.
 
-    Drives every optimizer in ``l2co``'s registry through the real
-    rollout at the family's production budget (= iterations) and asserts
-    none reaches a loss below ``global_min``. An optimizer that *errors*
-    on a task is skipped -- it cannot establish a floor breach. Fixed
+    Drives every bare optimizer (``l2co_optimizers.optimizers``) through
+    ``l2co``'s real rollout at the family's production budget
+    (= iterations) and asserts none reaches a loss below ``global_min``.
+    An optimizer that *errors* on a task is skipped --
+    cannot establish a floor breach. Fixed
     keys make the sweep reproducible.
     """
     pytest.importorskip("l2co")
     from l2co import OptimizationStep, RolloutWrapper
-    from l2co.optimizers import optimizers as all_optimizers
     from l2co.sampling import normal_sampling, random_sampling
+    from l2co_optimizers import optimizers as all_optimizers
 
     task = build_case(case_id)
     assert task.global_min is not None
@@ -340,7 +341,7 @@ def test_empirical_global_min_floor_against_all(case_id, build_case):
     sampler = random_sampling if unit else normal_sampling
     n_iterations = _PRODUCTION_BUDGET[case_id]
 
-    best, worst_opt = jnp.inf, None
+    best, worst_opt, completed = jnp.inf, None, 0
     for name in sorted(all_optimizers):
         try:
             rollout = RolloutWrapper.init(
@@ -358,8 +359,13 @@ def test_empirical_global_min_floor_against_all(case_id, build_case):
             reached = float(jnp.min(history.output_min))
         except Exception:
             continue
+        completed += 1
         if reached < best:
             best, worst_opt = reached, name
+
+    # Errors are skipped, so without this an API break that makes every
+    # optimizer raise would pass with ``best = inf``.
+    assert completed > 0, f"{case_id}: no portfolio optimizer completed"
 
     tol = EMPIRICAL_RTOL * abs(task.global_min) + EMPIRICAL_ATOL
     assert best >= task.global_min - tol, _breach_msg(

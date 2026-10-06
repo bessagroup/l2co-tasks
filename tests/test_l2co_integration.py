@@ -3,7 +3,7 @@
 The contract suite exercises the canonical loss-invocation contract via
 a test-side replica (``_contract_utils.py``); this suite closes the
 loop by driving representative tasks through the actual downstream
-machinery -- ``l2co.RunState`` / ``RolloutWrapper`` -- and checking the
+machinery -- ``l2co.init_run_state`` / ``RolloutWrapper`` -- and checking the
 two views agree.
 
 ``l2co`` is intentionally **not** a dependency of ``l2co-tasks`` (the
@@ -32,7 +32,7 @@ import pytest
 
 l2co = pytest.importorskip("l2co")
 
-from l2co import OptimizationStep, RolloutWrapper, RunState  # noqa: E402
+from l2co import OptimizationStep, RolloutWrapper, init_run_state  # noqa: E402
 from l2co.history import BatchState  # noqa: E402
 from l2co.optimization import run  # noqa: E402
 from l2co.sampling import normal_sampling, random_sampling  # noqa: E402
@@ -106,15 +106,15 @@ def _rollout(task, case_id: str, key) -> RolloutWrapper:
 
 @pytest.mark.parametrize("case_id", [_params(i) for i in INTEGRATION_IDS])
 def test_runstate_init(case_id, build_case):
-    """``RunState.init`` accepts the task and replicates its model.
+    """``init_run_state`` accepts the task and replicates its model.
 
     ``task.model``'s parameter values are arbitrary placeholders (only
-    the static structure is contractual); ``RunState.init`` copies them
+    the static structure is contractual); ``init_run_state`` copies them
     verbatim and the sampler reset in ``evaluate``/``batch_evaluate``
     replaces them. This test pins that init mechanic.
     """
     task = build_case(case_id)
-    rs = RunState.init(
+    rs = init_run_state(
         optimizer=_optimizer(),
         task=task,
         bounded=_bounded(case_id),
@@ -167,7 +167,7 @@ def test_run_matches_contract_replica(case_id, build_case):
     dataset-free tasks only).
     """
     task = build_case(case_id)
-    rs = RunState.init(
+    rs = init_run_state(
         optimizer=_optimizer(),
         task=task,
         bounded=_bounded(case_id),
