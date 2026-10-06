@@ -26,6 +26,8 @@ Pytest config (`[tool.pytest.ini_options]` in `pyproject.toml`) declares two mar
 
 ## Architecture
 
+**Never import `l2co` or `l2co_optimizers` from `src/`.** A ruff `TID251` banned-api rule fails the lint: this package knows tasks, not optimizers, and `l2co` is the only bridge between a `Task` and an `OptimizationStep` (l2co ADR 0018).
+
 Public API lives at the package root (`src/l2co_tasks/__init__.py`); all implementation is under `src/l2co_tasks/_src/` and is not meant to be imported directly. `l2co_tasks.tasks` is a secondary re-export module that exposes only the per-family `create_*` factories (it does **not** re-export `create_tasks_experimentdata` or `retrieve_tasks`). The top-level package additionally re-exports the `f3dasm.Block` samplers `CEC2019Sampler` and `PDETaskSampler`, plus the `f3dasm.ExperimentData` helpers `create_tasks_experimentdata` and `retrieve_tasks`, for use in `f3dasm.ExperimentData` pipelines.
 
 ### The `Task` abstraction (`_src/task.py`)
