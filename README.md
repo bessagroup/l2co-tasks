@@ -3,6 +3,7 @@
 # L2CO Tasks
 
 | [**GitHub**](https://github.com/bessagroup/l2co-tasks)
+| [**PyPI**](https://pypi.org/project/l2co-tasks/)
 | [**Documentation**](https://l2co-tasks.readthedocs.io/en/latest/)
 
 Optimization tasks compatible with the L2CO library
