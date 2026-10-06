@@ -35,7 +35,7 @@ maintainers = [
 name = "l2co-tasks"
 readme = "README.md"
 requires-python = ">= 3.12"
-version = "0.1.0"
+version = "0.2.0"
 
 [project.optional-dependencies]
 dev = [
@@ -101,8 +101,13 @@ select = [
   "F", # Pyflakes
   "I", # isort
   "B", # flake8-bugbear
-  "UP" # pyupgrade
+  "UP", # pyupgrade
+  "TID251" # flake8-tidy-imports banned-api
 ]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"l2co".msg = "l2co-tasks must not know optimizers; l2co bridges Task and OptimizationStep (l2co ADR 0018)."
+"l2co_optimizers".msg = "l2co-tasks must not know optimizers; l2co bridges Task and OptimizationStep (l2co ADR 0018)."
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401", "E402"]

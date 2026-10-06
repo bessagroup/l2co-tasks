@@ -40,10 +40,14 @@ experimentdata:
           - 10
           - 30
           - 50
+      # 4 instance seeds per (function, dimensionality), as in bbob.yaml:
+      # bbob-jax samples each instance's shift/rotation (and global_min)
+      # from the key, so each seed is a distinct instance rather than a
+      # repeat. Rollout repeats are a separate axis (`n_realizations`).
       seed:
         type: int
         low: 0
-        high: 0
+        high: 3
 
 task_kwargs:
 
