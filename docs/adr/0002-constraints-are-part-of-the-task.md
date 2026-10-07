@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Constraints are part of the task
