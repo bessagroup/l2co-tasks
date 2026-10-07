@@ -24,7 +24,3 @@ schema:
     - convection
     - reaction
     - wave
-
-# Optimization domain (PINN parameters are unconstrained). Set to a
-# [lower, upper] for bounded tasks, omit (or null) for unbounded.
-bounded:

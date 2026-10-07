@@ -97,5 +97,3 @@ schema:
   # bbob_noisy tasks of this set, True for the 2 bbob +
   # 4 embedded.
   deterministic: boolean
-
-bounded:

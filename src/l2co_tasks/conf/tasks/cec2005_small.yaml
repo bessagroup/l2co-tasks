@@ -55,6 +55,3 @@ schema:
   multimodal: boolean
   composition: boolean
   rotated: boolean
-
-# [lower, upper] for bounded tasks, omit (or null) for unbounded.
-bounded:

@@ -3,7 +3,8 @@
 The shared vocabulary for `l2co-tasks` — the package of optimization
 `Task` objects consumed by the L2CO optimizer-selection studies. This
 glossary focuses on the terms that recur when reasoning about whether a
-task is *well-posed*: its global minimum and how optimizers behave on it.
+task is *well-posed*: its feasible region, its global minimum, and how
+optimizers behave on it.
 
 ## Language
 
@@ -11,7 +12,8 @@ task is *well-posed*: its global minimum and how optimizers behave on it.
 The reference loss value recorded on every `Task`, against which an
 optimizer's progress is measured. Not merely informational — it is
 subtracted from trajectories downstream (see **Quality value**) and is
-part of the task's identity (`tag_hashable`, `hash`).
+part of the task's identity (`tag_hashable`, `hash`). For a constrained
+task it is the minimum over the **feasible** region.
 
 **Quality value**:
 A trajectory's loss shifted into `loss − global_min` space, where the
@@ -22,9 +24,9 @@ is the term the `l2co` code uses).
 
 **Floor**:
 The property that `global_min` is a true lower bound — *no* optimizer,
-at any budget, drives the loss below it. When the floor is violated the
-quality value goes negative and the downstream log-scaling silently
-produces NaNs. Validating the floor is the first goal of this effort.
+at any budget, finds a **feasible** point with a loss below it. When the
+floor is violated the quality value goes negative and the downstream
+log-scaling silently produces NaNs. Validating the floor is the first goal of this effort.
 
 **Analytical `global_min`**:
 A `global_min` known in closed form and a genuine mathematical lower
@@ -86,3 +88,39 @@ plus the universal sanity floor: every optimizer must beat `randomsearch`.
 One random-start repeat of an optimizer on a fixed task instance. The
 study uses ~16 (8 for the 41k-budget PINNs), pooled within a contrast
 for statistical power; all seeds fixed so the study re-runs bit-for-bit.
+
+### Constraints
+
+**Constraint**:
+A condition on a task's parameters that every solution must satisfy,
+declared by the task as part of the problem. There are three kinds: an
+*inequality* `g(x) ≤ 0`, an *equality* `h(x) = 0`, and a **Box**. A
+constraint depends on the parameters alone, never on data or randomness.
+_Avoid_: penalty (a penalty is one way an optimizer handles a
+constraint, not the constraint itself).
+
+**Box**:
+Lower and upper limits on each of a task's parameters: the hard domain
+an optimizer must stay inside. Unlike the other kinds of constraint, a
+task's starting point must already lie inside its box.
+_Avoid_: bounds, `bounded`, domain (the `[0, 1]^d` scaling convention of
+the benchmark tasks is not a box unless the task declares one).
+
+**Feasible**:
+Said of a point that satisfies every constraint of its task, each within
+its **feasibility tolerance**. The feasible region is the set of
+feasible points; for an unconstrained task it is all of parameter space.
+_Avoid_: valid, admissible.
+
+**Feasibility tolerance**:
+How far a single constraint may miss and still count as satisfied. It
+is part of the problem definition and set per constraint: by the CEC
+convention, `1e-4` for an equality and `0` for an inequality. A box has
+none.
+_Avoid_: epsilon, slack.
+
+**Violation**:
+The non-negative amount by which a point misses a constraint beyond its
+feasibility tolerance. It is zero exactly where the constraint is
+satisfied.
+_Avoid_: infeasibility, constraint error.

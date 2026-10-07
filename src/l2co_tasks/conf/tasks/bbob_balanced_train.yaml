@@ -328,5 +328,3 @@ schema:
   dimensionality: continuous
   separable: boolean
   unimodal: boolean
-
-bounded:
