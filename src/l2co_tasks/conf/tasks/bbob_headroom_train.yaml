@@ -162,5 +162,3 @@ schema:
   # is unchanged and no trajectory is re-run. False for exactly the 25
   # bbob_noisy tasks of this half, True for the 25 bbob + 50 embedded.
   deterministic: boolean
-
-bounded:

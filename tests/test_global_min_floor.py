@@ -40,6 +40,8 @@ an estimator bug shows up as a breach here rather than being reproduced.
 
 from __future__ import annotations
 
+import dataclasses
+
 import bbob_jax
 import equinox as eqx
 import jax
@@ -48,6 +50,8 @@ import jax.random as jr
 import jax.tree_util as jtu
 import optax
 import pytest
+
+from l2co_tasks import Box
 
 from ._contract_utils import evaluate_task_loss, sample_model
 from .task_cases import CASE_BY_ID
@@ -337,7 +341,11 @@ def test_empirical_global_min_floor_against_all(case_id, build_case):
     task = build_case(case_id)
     assert task.global_min is not None
     unit = CASE_BY_ID[case_id].domain == "unit"
-    bounded = (0.0, 1.0) if unit else (None, None)
+    if unit and not task.constraints:
+        # Bounds come from the task (l2co ADR 0020): a unit-domain task
+        # that doesn't declare its box yet gets one here, so the
+        # portfolio stays clipped to [0, 1] as before.
+        task = dataclasses.replace(task, constraints=[Box(0.0, 1.0)])
     sampler = random_sampling if unit else normal_sampling
     n_iterations = _PRODUCTION_BUDGET[case_id]
 
@@ -349,7 +357,6 @@ def test_empirical_global_min_floor_against_all(case_id, build_case):
                 task=task,
                 sampler=sampler,
                 key=jr.key(0),
-                bounded=bounded,
             )
             _, _, history = rollout.batch_evaluate(
                 key=jr.key(1),

@@ -21,5 +21,3 @@ schema:
   dimensionality: continuous
   task_name:
     - viscous_burgers
-
-bounded:
