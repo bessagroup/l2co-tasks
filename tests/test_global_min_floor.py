@@ -231,6 +231,39 @@ def _strong_best(task, case, *, n_restarts, n_steps, seed=0):
     return float(best)
 
 
+def _floor_suite():
+    """The optimizers the slow floor test drives.
+
+    Every entry of l2co-optimizers' ``all`` suite config, with its
+    hyperparameters (the optax methods need a learning rate), plus every
+    registry optimizer that config lacks, built with its defaults. The
+    floor must hold against anything that could join a portfolio (ADR
+    0001), so the suite follows both the config and the registry.
+    """
+    from importlib.resources import files
+
+    from l2co_optimizers import OptimizationStep, normalize_key
+    from l2co_optimizers import optimizers as registry
+    from omegaconf import OmegaConf
+
+    path = files("l2co_optimizers.conf.optimizers") / "all.yaml"
+    entries = OmegaConf.to_container(OmegaConf.load(str(path)))
+    suite = [
+        OptimizationStep(
+            optimizer=e["optimizer"],
+            hyperparameters=e.get("hyperparameters") or {},
+        )
+        for e in entries
+    ]
+    configured = {normalize_key(step.optimizer) for step in suite}
+    suite += [
+        OptimizationStep(optimizer=name)
+        for name in sorted(registry)
+        if name not in configured
+    ]
+    return suite
+
+
 def _breach_msg(case_id, best, gmin, who):
     """Assertion message describing a floor breach and its margin."""
     return (
@@ -326,17 +359,16 @@ def test_theoretical_global_min_is_nonnegative_floor(case_id, build_case):
 def test_empirical_global_min_floor_against_all(case_id, build_case):
     """The full ``all`` suite at production budget never breaches.
 
-    Drives every bare optimizer (``l2co_optimizers.optimizers``) through
-    ``l2co``'s real rollout at the family's production budget
-    (= iterations) and asserts none reaches a loss below ``global_min``.
-    An optimizer that *errors* on a task is skipped --
-    cannot establish a floor breach. Fixed
-    keys make the sweep reproducible.
+    Drives the floor suite (:func:`_floor_suite`) through ``l2co``'s
+    real rollout at the family's production budget (= iterations) and
+    asserts none reaches a loss below ``global_min``. An optimizer that
+    *errors* on a task is skipped -- it cannot establish a floor breach
+    -- and the run prints how many completed and which errored, so the
+    coverage is on record. Fixed keys make the sweep reproducible.
     """
     pytest.importorskip("l2co")
-    from l2co import OptimizationStep, RolloutWrapper
+    from l2co import RolloutWrapper
     from l2co.sampling import normal_sampling, random_sampling
-    from l2co_optimizers import optimizers as all_optimizers
 
     task = build_case(case_id)
     assert task.global_min is not None
@@ -349,11 +381,13 @@ def test_empirical_global_min_floor_against_all(case_id, build_case):
     sampler = random_sampling if unit else normal_sampling
     n_iterations = _PRODUCTION_BUDGET[case_id]
 
-    best, worst_opt, completed = jnp.inf, None, 0
-    for name in sorted(all_optimizers):
+    suite = _floor_suite()
+    best, worst_opt, completed, errored = jnp.inf, None, 0, []
+    for step in suite:
+        name = step.optimizer
         try:
             rollout = RolloutWrapper.init(
-                optimizer=OptimizationStep(optimizer=name),
+                optimizer=step,
                 task=task,
                 sampler=sampler,
                 key=jr.key(0),
@@ -363,12 +397,24 @@ def test_empirical_global_min_floor_against_all(case_id, build_case):
                 n_iterations=n_iterations,
                 n_realizations=_PORTFOLIO_REALIZATIONS,
             )
-            reached = float(jnp.min(history.output_min))
-        except Exception:
+            # NaN-aware: one diverged iteration must not hide the finite
+            # progress the rest of the run made.
+            reached = float(jnp.nanmin(history.output_min))
+        except Exception as e:
+            errored.append(f"{name} ({type(e).__name__})")
+            continue
+        if not jnp.isfinite(reached):
+            errored.append(f"{name} (no finite loss)")
             continue
         completed += 1
         if reached < best:
             best, worst_opt = reached, name
+
+    print(
+        f"{case_id}: {completed}/{len(suite)} optimizers completed; best "
+        f"{best:.6g} ({worst_opt}) vs global_min {task.global_min:.6g}; "
+        f"errored: {', '.join(errored) or 'none'}"
+    )
 
     # Errors are skipped, so without this an API break that makes every
     # optimizer raise would pass with ``best = inf``.
