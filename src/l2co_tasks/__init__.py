@@ -14,6 +14,7 @@ from ._src.benchmark_task import (
     create_cec2013lsgo_task,
     create_cec2017_task,
 )
+from ._src.constraints import Box, Constraint, Equality, Inequality
 from ._src.continue_from_path import retrieve_tasks
 from ._src.embedded_task import create_embedded_bbob_task
 from ._src.euler import EulerTaskSampler, create_euler_task
@@ -47,10 +48,14 @@ __status__ = "Stable"
 # =============================================================================
 
 __all__ = [
+    "Box",
     "CEC2019Sampler",
+    "Constraint",
     "DatasetDict",
+    "Equality",
     "EulerTaskSampler",
     "HelmholtzTaskSampler",
+    "Inequality",
     "InviscidBurgersTaskSampler",
     "PDETaskSampler",
     "PKPDTaskSampler",

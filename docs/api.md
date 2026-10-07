@@ -10,6 +10,23 @@ The single object every factory returns: a serializable bundle of a model, a los
 
 ::: l2co_tasks.DatasetDict
 
+## Constraints
+
+Equality, inequality and box constraints a task declares on its
+parameters, passed to `Task` as `constraints=[...]`. Every constraint is
+called as `c(model)` and returns raw values where `<= 0` means
+satisfied (`= 0` for an equality). Enforcement belongs to `l2co`,
+which forwards a box to the optimizers and refuses a task carrying an
+inequality or equality, since nothing downstream can enforce those yet.
+
+::: l2co_tasks.Constraint
+
+::: l2co_tasks.Inequality
+
+::: l2co_tasks.Equality
+
+::: l2co_tasks.Box
+
 ## Estimating the global minimum
 
 Benchmark a task's best achievable loss with a short, seeded, multi-restart Adam search. This is how the supervised-learning and meta factories set their *empirical* `global_min`; it is also a standalone helper for custom tasks.

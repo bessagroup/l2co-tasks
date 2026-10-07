@@ -40,8 +40,9 @@ Public API lives at the package root (`src/l2co_tasks/__init__.py`); all impleme
 - `has_aux` (static): whether `loss_fn` returns `(loss, aux)`.
 - `dataset` (static `DatasetDict | None`): `{dataset_path, batch_size, seed}` — paths only; arrays are loaded lazily via the `loaded_dataset` property. `None` (the default) means the task carries no dataset; `loaded_dataset` returns `{}` and `batch_size` returns `None` in that case.
 - `tag` (static dict): free-form metadata (function name, dimensionality, seed, noise, etc.) used for identity via `tag_hashable`, `hash`, `__eq__`, `__hash__`.
+- `constraints` (`tuple[Constraint, ...]`, default `()`): equality, inequality and box constraints on the model's parameters (`_src/constraints.py`, ADR 0002). Elements are `Inequality(fn, name, tol=0)`, `Equality(fn, name, tol=1e-4)` or `Box(lower, upper)`; all are called as `c(model)` (no key, no data batch) and return raw values read as "≤ 0 is satisfied". `Task.__post_init__` runs `resolve_constraints`, which enforces the rules (at most one `Box`, unique names, box matches the model and contains the starting model, …) and casts a single-number `Box` to the model's parameters — so it re-runs on `dataclasses.replace`. Constraints join `tag_hashable` **only when present**: an unconstrained task's `hash` and `.eqx` bytes are exactly what they were before constraints existed, pinned by `tests/test_task_golden_hashes.py`. Enforcement is l2co's (l2co ADR 0020, stage 2 of ADR 0002): it forwards a uniform `Box` to the optimizers and refuses a task with an `Inequality` or `Equality`. Until that lands, nothing downstream reads `constraints`, which is why no factory sets one yet.
 
-Serialization is a **single-file `.eqx` format**: a UTF-8 JSON header line (loss function + model skeleton pickled via `cloudpickle` and hex-encoded, plus dataset reference and tags) followed by the binary leaf bytes from `eqx.tree_serialise_leaves`. `Task.save` / `Task.load` are the canonical (and only) entrypoints — the legacy multi-file `.json` format and its `from_dict` / `save_to_json` shims have been removed, as have `_io.load_model` and `_io.load_jnparray`. `_src/_io.py` now only provides `load_dataset` for `.npz` files. `dataset_path` is stored **relative to the `.eqx` file** so a task and its `.npz` dataset can be moved together.
+Serialization is a **single-file `.eqx` format**: a UTF-8 JSON header line (loss function + model skeleton pickled via `cloudpickle` and hex-encoded, plus dataset reference and tags; a `constraints` key, likewise pickled, is written only when the task has constraints) followed by the binary leaf bytes from `eqx.tree_serialise_leaves`. `Task.save` / `Task.load` are the canonical (and only) entrypoints — the legacy multi-file `.json` format and its `from_dict` / `save_to_json` shims have been removed, as have `_io.load_model` and `_io.load_jnparray`. `_src/_io.py` now only provides `load_dataset` for `.npz` files. `dataset_path` is stored **relative to the `.eqx` file** so a task and its `.npz` dataset can be moved together.
 
 Key invariant: `loss_fn` and the model skeleton are round-tripped via `cloudpickle.dumps(...).hex()`. When editing loss functions, keep them picklable (module-level or closures over picklable values) — anonymous lambdas over non-picklable state will break `save`/`load`.
 
@@ -83,7 +84,7 @@ Default vocabulary — `needs-triage`, `needs-info`, `ready-for-agent`, `ready-f
 
 ### Domain docs
 
-**Single-context** — `CONTEXT.md` + `docs/adr/` at the repo root (created lazily by `/domain-modeling`; absent today). See `docs/agents/domain.md`.
+**Single-context** — `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
 ## Related repositories
 
