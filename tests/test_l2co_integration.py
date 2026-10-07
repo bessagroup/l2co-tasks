@@ -125,7 +125,6 @@ def test_runstate_init(case_id, build_case):
     rs = init_run_state(
         optimizer=_optimizer(),
         task=task,
-        bounded=None,
         key=jr.key(0),
     )
     assert rs.best_loss == jnp.inf
@@ -178,7 +177,6 @@ def test_run_matches_contract_replica(case_id, build_case):
     rs = init_run_state(
         optimizer=_optimizer(),
         task=task,
-        bounded=None,
         key=jr.key(3),
     )
     bs = BatchState.init(
