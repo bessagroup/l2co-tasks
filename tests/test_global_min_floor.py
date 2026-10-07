@@ -403,6 +403,12 @@ def test_empirical_global_min_floor_against_all(case_id, build_case):
         except Exception as e:
             errored.append(f"{name} ({type(e).__name__})")
             continue
+        finally:
+            # Every optimizer compiles its own programs and none is reused,
+            # so drop them: ~73 rollouts otherwise exhaust vm.max_map_count
+            # (65530 on Oscar batch nodes) and LLVM fails with "Cannot
+            # allocate memory" mid-sweep.
+            jax.clear_caches()
         if not jnp.isfinite(reached):
             errored.append(f"{name} (no finite loss)")
             continue
