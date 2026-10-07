@@ -29,7 +29,7 @@ inequality or equality, since nothing downstream can enforce those yet.
 
 ## Estimating the global minimum
 
-Benchmark a task's best achievable loss with a short, seeded, multi-restart Adam search. This is how the supervised-learning and meta factories set their *empirical* `global_min`; it is also a standalone helper for custom tasks.
+Benchmark a task's best achievable loss with a short, seeded, multi-restart Adam search. This is how the supervised-learning and meta factories set their *empirical* `global_min`; it is also a standalone helper for custom tasks. A task with a `Box` is searched inside it.
 
 ::: l2co_tasks.estimate_global_min
 

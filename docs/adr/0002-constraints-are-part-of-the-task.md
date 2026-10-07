@@ -133,19 +133,39 @@ constrained task family:
 
 ## The `global_min` estimator
 
-`_estimate_global_min` reads the task's `Box` instead of taking
-`clip_to_unit`, which is removed. A `Box` switches it into box mode:
-steps are clipped to the box's bounds and restarts are drawn uniformly
-from them. Uniform draws need finite bounds, so it raises for a box with
-an open side, and for any `Inequality` or `Equality`, which it can't
-handle. The floor test's copy of the restart logic
-(`tests/test_global_min_floor.py`) follows.
+`estimate_global_min` reads the task's `Box` instead of taking
+`clip_to_unit`. A `Box` switches it into box mode: steps are clipped to
+the box's bounds, restarts are drawn uniformly from them, and the L-BFGS
+arm is skipped. Uniform draws need finite bounds, so it raises for a box
+with an open side, and for any `Inequality` or `Equality`, which it
+can't handle. For `Box(0, 1)` this reproduces the old
+`clip_to_unit=True` results bit for bit.
+
+`estimate_global_min` is public and was released with `clip_to_unit`
+(v0.2.0), so removing the keyword is a **breaking change** for the next
+release. No sibling repository passes it. A caller who did adds a `Box`
+to the task instead.
+
+The floor test's own restart logic (`tests/test_global_min_floor.py`)
+stays keyed on the test registry's `domain`, not on the task's box: it
+is an independent oracle for the estimator, and it keeps the unit-domain
+benchmark cases (which declare no box) clipped to `[0, 1]`.
 
 ## First consumer: `gaussian_meta`
 
 `create_gaussian_meta_task` gets `Box(0.0, 1.0)`. Its starting model,
-`[0, 0, 0]`, lies on the box's corner, so it passes the start check. Its
-10 task hashes change. The 100 loss files in
+`[0, 0, 0]`, lies on the box's corner, so it passes the start check.
+
+The box made a degenerate point reachable. The momenta were decoded as
+`0.85 + 0.15 * x`, so the upper face `x = 1` gave `b1` or `b2 = 1`,
+where Adam's bias correction is `0/0` and the loss NaN. Unbounded
+optimizers used to overshoot past it; clipping parks them on it. The
+mapping is therefore shrunk to `0.85 + 0.149 * x`, so `b1, b2` stay in
+`[0.85, 0.999]` and the loss is finite on the whole closed box. This
+changes the loss at every point, so its estimated `global_min` changes
+with it.
+
+Its 10 task hashes change. The 100 loss files in
 `databank/gaussian_meta/loss_history_raw/`, written 21–28 Aug 2026 by
 optimizers free to leave the box, stay where they are, under keys new
 tasks no longer match. That is intended: they describe a different
