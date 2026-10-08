@@ -64,6 +64,25 @@ def count_parameters(model: PyTree) -> int:
     )
 
 
+class _SortedFrozenset(frozenset):
+    """A frozenset that prints its items in sorted order.
+
+    :attr:`Task.hash` digests the printed tag, and a plain frozenset
+    prints its items in an order that changes with the process's string
+    hash seed (``PYTHONHASHSEED``). A tag holding a dict of two or more
+    keys therefore hashed differently from one process to the next.
+
+    With zero or one item this prints exactly what ``frozenset`` does, so
+    those hashes are unchanged. It compares and hashes as a plain
+    frozenset.
+    """
+
+    def __repr__(self) -> str:
+        if not self:
+            return "frozenset()"
+        return "frozenset({" + ", ".join(sorted(map(repr, self))) + "})"
+
+
 class _PickledShapeDtypeStruct:
     """What a pickled ``jax.ShapeDtypeStruct`` loads as, before it is rebuilt.
 
@@ -252,12 +271,16 @@ class Task(eqx.Module):
         -------
         frozenset of tuple[str, Any]
             Hashable version of the tag dictionary as a frozenset of
-            key-value pairs.
+            key-value pairs. Nested dicts and frozensets print their items
+            in sorted order, so :attr:`hash` is the same in every process.
         """
 
         def make_hashable(value):
             """
             Recursively convert lists to tuples and dicts to frozensets.
+
+            Dicts and frozensets become :class:`_SortedFrozenset`, whose
+            printed form does not depend on ``PYTHONHASHSEED``.
 
             Parameters
             ----------
@@ -272,9 +295,11 @@ class Task(eqx.Module):
             if isinstance(value, list):
                 return tuple(make_hashable(v) for v in value)
             elif isinstance(value, dict):
-                return frozenset(
+                return _SortedFrozenset(
                     (k, make_hashable(v)) for k, v in value.items()
                 )
+            elif isinstance(value, frozenset):
+                return _SortedFrozenset(make_hashable(v) for v in value)
             # Leave other types unchanged
             return value
 
