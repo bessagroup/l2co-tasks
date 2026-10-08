@@ -124,3 +124,18 @@ The non-negative amount by which a point misses a constraint beyond its
 feasibility tolerance. It is zero exactly where the constraint is
 satisfied.
 _Avoid_: infeasibility, constraint error.
+
+### Host objectives
+
+**Host objective**:
+A task's objective computed outside JAX, such as compiled Fortran or a
+simulator, which optimizers see only through an ordinary `loss_fn`
+(ADR 0003). A task built on one is a **host task**.
+_Avoid_: external loss, non-JAX task, black box (every task is a black
+box to a gradient-free optimizer).
+
+**Prescribed start**:
+The starting point a problem's source defines as part of the problem,
+such as CUTEst's `x0`. A task with one keeps it as its model, in the
+problem's own coordinates (ADR 0004).
+_Avoid_: initial guess.
