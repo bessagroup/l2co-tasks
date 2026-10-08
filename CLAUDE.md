@@ -46,6 +46,15 @@ Serialization is a **single-file `.eqx` format**: a UTF-8 JSON header line (loss
 
 Key invariant: `loss_fn` and the model skeleton are round-tripped via `cloudpickle.dumps(...).hex()`. The skeleton is read back with `_SkeletonUnpickler`, which rebuilds each `jax.ShapeDtypeStruct` from its shape and dtype only: the fields JAX pickles for that class change between releases (JAX 0.11 dropped `vma`), and unpickling straight into the running JAX's class made files written under another JAX unloadable (`tests/test_skeleton_across_jax_versions.py`). When editing loss functions, keep them picklable (module-level or closures over picklable values) — anonymous lambdas over non-picklable state will break `save`/`load`.
 
+### Host objectives (`_src/host_objective.py`, ADR 0003)
+
+A task whose objective is computed outside JAX (compiled Fortran, a simulator) gets an ordinary `loss_fn` from `host_loss(opener)`. The opener is a picklable, hashable, zero-argument callable returning an objective with `value(x) -> float` and, optionally, `value_and_grad(x) -> (float, ndarray)`, on the model's floating-point parameters flattened to one float64 vector.
+- `HostLoss` is an `eqx.Module` holding only the opener (static), so a `Task` holding it saves and loads without opening anything, and equal openers give equal, equally hashed losses.
+- The value is a `jax.pure_callback` inside a `jax.custom_jvp` whose rule asks the host for value and gradient in one call. It must stay `custom_jvp`: optimistix takes gradients with `jax.linearize` (forward mode), which a `custom_vjp` breaks. `vmap_method="expand_dims"` hands the host a whole batch.
+- Per process, `_OPENED` maps each opener to its opened objective, two last-point caches and the traced function; an `RLock` serializes opening and host calls. There is one cache per kind of request (value, value-and-gradient) and they never answer for each other: an objective's two routines may differ in the last bit, and mixing them made a run's numbers depend on which run came before it in the same process. The objective is opened at first trace, in `HostLoss.__call__`, not inside the callback, where a failure would arrive wrapped in a `JaxRuntimeError`.
+- Tracing with non-float64 parameters warns. A dataset batch or key raises `TypeError` (not supported yet). Differentiating an objective without `value_and_grad` raises `TypeError` at trace time.
+- Adapters must be deterministic, make at most one billed evaluation per host call (no hidden finite differences) and compute in float64. Test openers must be module-level and hashable (`tests/test_host_objective.py` uses a frozen dataclass) so `Task.save` can pickle them.
+
 ### Task families (each in its own `_src/*_task.py` or module)
 
 Every family exposes a top-level `create_<name>_task(...)` factory that builds and returns a `Task`:
