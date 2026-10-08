@@ -70,7 +70,7 @@ Every family exposes a top-level `create_<name>_task(...)` factory that builds a
 
 - Ruff is configured with a **79-char line length** and numpy-style docstrings; `__init__.py` files are exempt from `F401`/`E402`.
 - `pyproject.toml` is auto-sorted by `toml-sort` via pre-commit — editing it manually then committing will trigger a reformat.
-- GitHub workflows in `.github/workflows/` are currently fully commented out; CI is effectively not running. Don't assume pushes are gated by tests.
+- CI: `.github/workflows/pull_request.yml` runs on every PR -- ruff (pinned to the pre-commit rev; bump the two together), pre-commit, `pytest -m "not slow"` on Linux/macOS x Python 3.12/3.13, the package build and the docs build. It checks out `bessagroup/f3dasm` next to the repo (the `../f3dasm` editable source) at `main` for a PR into `main` and at `develop` otherwise. `requires_l2co` tests skip there (no l2co). `build_docs.yml` builds the docs on pushes to `main`; `release.yml` publishes.
 
 ## Agent skills
 
