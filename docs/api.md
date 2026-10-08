@@ -42,6 +42,19 @@ opened once per process, the first time the loss is traced.
 
 ::: l2co_tasks.HostLoss
 
+## CUTEst problems
+
+Unconstrained problems from CUTEst, the standard collection of
+nonlinear-optimization test problems, evaluated in compiled Fortran
+through pycutest behind a host loss (ADR 0004). Needs the optional
+`[cutest]` extra and a CUTEst installation, with `CUTEST`, `SIFDECODE`
+and `MASTSIF` set. Unlike the other task families, a CUTEst task's model
+is the problem's own starting point `x0`, in the problem's own
+coordinates. `global_min` comes from a committed table; until a
+(problem, size) has a row there, pass `global_min` explicitly.
+
+::: l2co_tasks.create_cutest_task
+
 ## Estimating the global minimum
 
 Benchmark a task's best achievable loss with a short, seeded, multi-restart Adam search. This is how the supervised-learning and meta factories set their *empirical* `global_min`; it is also a standalone helper for custom tasks. A task with a `Box` is searched inside it.

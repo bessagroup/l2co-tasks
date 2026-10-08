@@ -741,6 +741,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+cutest = [
+    { name = "pycutest" },
+]
 dev = [
     { name = "build" },
     { name = "pre-commit" },
@@ -786,6 +789,7 @@ requires-dist = [
     { name = "optax", specifier = ">=0.2.5" },
     { name = "pandas" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.4.0" },
+    { name = "pycutest", marker = "extra == 'cutest'", specifier = ">=1.8,<2" },
     { name = "pymdown-extensions", marker = "extra == 'docs'", specifier = ">=10.16.1" },
     { name = "pytest", marker = "extra == 'tests'", specifier = ">=8.4.1" },
     { name = "pytest-cov", marker = "extra == 'tests'", specifier = ">=6.2.1" },
@@ -793,7 +797,7 @@ requires-dist = [
     { name = "setuptools", marker = "extra == 'dev'", specifier = ">=77.0.0" },
     { name = "wheel", marker = "extra == 'dev'" },
 ]
-provides-extras = ["dev", "docs", "tests"]
+provides-extras = ["cutest", "dev", "docs", "tests"]
 
 [[package]]
 name = "lineax"
@@ -1539,6 +1543,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ec/29/f27a4e1eddf72ed3db6e47818fbafe6debbf09fd7051f9c1a007239b46ef/properdocs-1.6.7.tar.gz", hash = "sha256:adc7b16e562890af0e098a7e5b02e3a81c20894a87d6a28d345c9300de73c26e", size = 276141, upload-time = "2026-03-20T20:07:48.167Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/bd/4d/fc923f5c85318ee8cc903566dc4e0ebe41b2dfc1d2ecf5546db232397ed6/properdocs-1.6.7-py3-none-any.whl", hash = "sha256:6fa0cfa2e01bf338f684892c8a506cf70ea88ae7f3479c933b6fa20168101cbd", size = 225406, upload-time = "2026-03-20T20:07:46.875Z" },
+]
+
+[[package]]
+name = "pycutest"
+version = "1.8.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "scipy" },
+    { name = "setuptools" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2e/ca/631b863d0ceab3c3b45229c504a5e3a4f7ef2266bde99374f173c1b13482/pycutest-1.8.2.tar.gz", hash = "sha256:1187c1ebd081e85ed39dbe706090d3f9a5eb8ed78083b7d6d4a698b7a44ec1cc", size = 50268, upload-time = "2026-04-28T13:22:49.531Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/56/1e/be4ecb8f1f5d5fe35668550aabd2095d78b155e578082d3a7028b57abb00/pycutest-1.8.2-py3-none-any.whl", hash = "sha256:537fedc0287bba2222c69991ea8e3bb434b4d17da16d36a66f91ca53f1c9b963", size = 49220, upload-time = "2026-04-28T13:22:48.264Z" },
 ]
 
 [[package]]

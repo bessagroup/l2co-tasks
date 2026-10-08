@@ -16,6 +16,7 @@ from ._src.benchmark_task import (
 )
 from ._src.constraints import Box, Constraint, Equality, Inequality
 from ._src.continue_from_path import retrieve_tasks
+from ._src.cutest_task import create_cutest_task
 from ._src.embedded_task import create_embedded_bbob_task
 from ._src.euler import EulerTaskSampler, create_euler_task
 from ._src.experimentdata import create_tasks_experimentdata
@@ -70,6 +71,7 @@ __all__ = [
     "create_cec2005_task",
     "create_cec2013lsgo_task",
     "create_cec2017_task",
+    "create_cutest_task",
     "create_embedded_bbob_task",
     "create_euler_task",
     "create_gaussian_meta_task",
