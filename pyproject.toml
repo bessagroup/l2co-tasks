@@ -38,6 +38,9 @@ requires-python = ">= 3.12"
 version = "0.3.0"
 
 [project.optional-dependencies]
+cutest = [
+  "pycutest>=1.8,<2"
+]
 dev = [
   "setuptools>=77.0.0",
   "build",
@@ -118,6 +121,7 @@ select = [
 convention = "numpy"
 
 [tool.setuptools.package-data]
+"l2co_tasks._src" = ["*.csv"]
 "l2co_tasks.conf" = ["**/*.yaml"]
 
 [tool.uv]

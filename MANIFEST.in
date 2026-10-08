@@ -1,3 +1,4 @@
 include LICENSE
 include README.md
 recursive-include src/l2co_tasks/conf *.yaml
+include src/l2co_tasks/_src/*.csv

@@ -37,6 +37,7 @@ from l2co_tasks import (
     create_cec2005_task,
     create_cec2013lsgo_task,
     create_cec2017_task,
+    create_cutest_task,
     create_embedded_bbob_task,
     create_euler_task,
     create_gaussian_meta_task,
@@ -360,6 +361,29 @@ _NEEDS_LSGO = (
 )
 
 
+# CUTEst cases need pycutest and a CUTEst installation (CUTEST,
+# SIFDECODE, MASTSIF set); without them they skip, as they do in CI.
+def _cutest_available() -> bool:
+    try:
+        import pycutest  # noqa: F401
+    except (ImportError, RuntimeError):
+        return False
+    return True
+
+
+_NEEDS_CUTEST = (
+    pytest.mark.skipif(
+        not _cutest_available(),
+        reason="needs pycutest and a CUTEst installation",
+    ),
+)
+
+
+def _cutest(problem: str, global_min: float) -> Callable[[Path], Task]:
+    """Return a builder for a CUTEst task outside the committed table."""
+    return lambda _p: create_cutest_task(problem, global_min=global_min)
+
+
 TASK_CASES: list[TaskCase] = [
     # Analytical, cheap, deterministic -- the strongest correctness checks.
     TaskCase(
@@ -402,6 +426,17 @@ TASK_CASES: list[TaskCase] = [
         domain="unit",
         gmin_is_lower_bound=False,
         marks=_NEEDS_BBOB_NOISY,
+    ),
+    # A CUTEst problem in its own coordinates, evaluated in compiled
+    # Fortran behind a host loss (ADRs 0003, 0004). ROSENBR is a sum of
+    # squares, so 0 is a true lower bound.
+    TaskCase(
+        "cutest-rosenbr",
+        "create_cutest_task",
+        _cutest("ROSENBR", 0.0),
+        domain="unbounded",
+        gmin_is_lower_bound=True,
+        marks=_NEEDS_CUTEST,
     ),
     TaskCase(
         "cec2005-f1",
