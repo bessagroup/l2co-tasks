@@ -46,12 +46,18 @@ callable that returns the objective. The objective has:
 - **Batched evaluation under vmap.** `vmap_method="expand_dims"` hands
   the host every point of a population, across every realization, in one
   call. The host then loops over the points.
-- **A last-point cache.** An optimizer that asks for the same point
-  twice in a row is served from the cache.
+- **Last-point caches, one per kind of request.** An optimizer that asks
+  for the same point twice in a row is served from the cache. A value
+  request is only ever answered from an earlier value request, and a
+  value-and-gradient request from an earlier value-and-gradient request.
+  An objective's two routines may differ in the last bit, and a single
+  shared cache made a run's numbers depend on which run came before it in
+  the same process.
 - **A lock around host calls.** Fortran and simulation codes are rarely
   safe to enter from two threads at once.
 - **`loss_fn` is a small module-level object**, not a closure. It holds
-  only `(opener, n, differentiable)`. The traced function and the opened
+  only the opener: the parameter count comes from the model, and whether
+  there is a gradient from the objective. The traced function and the opened
   objective are built lazily, once per process, and the objective is
   opened when JAX traces the loss rather than inside the callback. A
   closure can't be saved: cloudpickle pickles it by value, together with
@@ -77,28 +83,41 @@ callable that returns the objective. The objective has:
    An objective without a gradient is simply non-differentiable.
 3. **float64 on the host.**
 
-## What the spike measured
+## What the spike and the first implementation measured
 
 Measured on Oscar on 2026-10-08, with ROSENBR, EXTROSNB and 19 entries
-covering every optimizer family. The scripts are in
+covering every optimizer family, then rechecked with the implemented
+module through l2co's `RolloutWrapper`. The scripts are in
 `/oscar/scratch/mvander7/host_task_spike/spike/`, which scratch purges
 after 30 days.
 
-- **The wrapper is exact.** If the host objective is a jitted JAX
-  function, so the arithmetic is identical, every family tested (9
-  entries: optax, `lbfgs`, optimistix, SHADE, CMA-ES, TNC, COBYQA,
-  Powell, IPOPT) gives trajectories bitwise identical to native JAX.
-  With CUTEst's Fortran, trajectories drift apart after 8–116 steps,
-  because its arithmetic differs from XLA's in the last bits. The best
-  values found still agree.
+- **The wrapper adds no error of its own, but don't expect bitwise
+  equality with native JAX.** A bare `jax.pure_callback` around the same
+  jitted function reproduces the module's numbers exactly. Against native
+  JAX, a host version agrees only up to arithmetic drift, even when the
+  host runs the same JAX function: XLA compiles it differently inside the
+  fused run loop than on its own.
+  - In the 2-D spike, 9 entries matched native JAX bitwise.
+  - In the implementation's 3-D check across 14 entries, adam drifts by
+    1 ulp from step 9, BFGS by 1e-14 from step 22, and trust-krylov only
+    near the optimum (step 116, between values of 1e-13 and 1e-21). The
+    rest match bitwise.
+
+  So tests compare against native JAX with a tolerance, over a short
+  horizon. SHADE is the exception: native SHADE itself depends on how
+  many realizations run together (https://github.com/bessagroup/l2co-optimizers/issues/24), so it is left out of those
+  comparisons until that is fixed. With CUTEst's Fortran, trajectories
+  drift apart after 8–116 steps, because its arithmetic differs from
+  XLA's in the last bits. The best values found still agree.
 - **Every transformation works:** `grad`, `jvp`, `linearize` plus
   transpose, nested vmap, `lax.map`, `lax.scan`, and the nested
   callbacks of the scipy and IPOPT drivers. A Hessian fails loudly
   ("Pure callbacks do not support JVP").
 - **Host calls against billed evaluations:** about 1:1, plus one
   unbilled evaluation of the starting population per realization.
-  `lbfgs` sends 3 requests per billed evaluation, and the last-point
-  cache absorbs them: 128 real evaluations for 209 billed.
+  `lbfgs` sends 3 requests per billed evaluation, all at the same point,
+  and the value-and-gradient cache absorbs them: 128 real evaluations for
+  209 billed.
 - **Overhead per billed evaluation, 25 realizations:**
   - 4–35 µs for the entries that run inside JAX (0.2–1.5 µs natively);
   - 0.4–0.8 ms for the scipy and IPOPT drivers (0.25 ms natively).
@@ -113,7 +132,7 @@ Each is added when a real adapter needs it, not before.
   (simulations). The module already hands the host a batch, so only the
   adapter interface grows.
 - **Stochastic objectives.** The key would reach the host as a seed. The
-  last-point cache would then be wrong, so it must be keyed on the seed
+  last-point caches would then be wrong, so they must be keyed on the seed
   too, or switched off.
 - **Objectives with side effects.** These need `io_callback` in place of
   `pure_callback`, which has tighter limits under vmap and
