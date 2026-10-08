@@ -239,6 +239,9 @@ class _CutestObjective:
         f, g = self._problem.obj(x, gradient=True)
         return float(f), np.asarray(g, dtype=np.float64)
 
+    def hessian(self, x: np.ndarray) -> np.ndarray:
+        return np.asarray(self._problem.hess(x), dtype=np.float64)
+
 
 @dataclass(frozen=True)
 class _CutestOpener:

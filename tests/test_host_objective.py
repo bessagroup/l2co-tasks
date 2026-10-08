@@ -69,6 +69,24 @@ class WrongGradientShape(ValueOnlyRosenbrock):
         return self.value(x), np.zeros(x.size + 1)
 
 
+class TwiceDifferentiableRosenbrock(Rosenbrock):
+    """Host objective with an analytic Hessian too (ADR 0005)."""
+
+    def hessian(self, x):
+        self.calls["hessian"] += 1
+        h = np.zeros((x.size, x.size))
+        i = np.arange(x.size - 1)
+        h[i, i] += 1200.0 * x[:-1] ** 2 - 400.0 * x[1:] + 2.0
+        h[i + 1, i + 1] += 200.0
+        h[i, i + 1] = h[i + 1, i] = -400.0 * x[:-1]
+        return h
+
+
+class WrongHessianShape(Rosenbrock):
+    def hessian(self, x):
+        return np.zeros((x.size, x.size + 1))
+
+
 @dataclasses.dataclass(frozen=True)
 class RosenbrockOpener:
     """Picklable, hashable opener. ``name`` gives each test its own
@@ -85,6 +103,8 @@ class RosenbrockOpener:
             "value_only": ValueOnlyRosenbrock,
             "inconsistent": InconsistentRosenbrock,
             "wrong_gradient": WrongGradientShape,
+            "hessian": TwiceDifferentiableRosenbrock,
+            "wrong_hessian": WrongHessianShape,
         }[self.kind]()
         _OBJECTIVES[self.name] = objective
         return objective
@@ -249,9 +269,74 @@ def test_differentiating_an_objective_without_gradient_raises(
         differentiate(host_loss(opener), jnp.asarray(X0))
 
 
-def test_second_derivatives_fail_loudly(loss):
-    with pytest.raises(ValueError, match="(?i)callback"):
+def test_second_derivatives_without_a_hessian_fail_loudly(loss):
+    with pytest.raises(TypeError, match="without hessian"):
         jax.hessian(loss)(jnp.asarray(X0))
+
+
+# Second derivatives (ADR 0005) -----------------------------------------------
+
+
+@pytest.fixture
+def twice(request) -> tuple[RosenbrockOpener, HostLoss]:
+    opener = RosenbrockOpener(request.node.name, "hessian")
+    return opener, host_loss(opener)
+
+
+@pytest.mark.parametrize(
+    "second",
+    [
+        jax.hessian,
+        lambda f: jax.jacrev(jax.jacrev(f)),
+        lambda f: jax.jacfwd(jax.grad(f)),
+    ],
+    ids=["hessian", "rev-over-rev", "fwd-over-rev"],
+)
+def test_hessian_matches_reference(twice, second):
+    _, loss = twice
+    x = jnp.asarray(X0)
+    np.testing.assert_allclose(
+        second(loss)(x), jax.hessian(rosenbrock)(x), rtol=1e-12
+    )
+    np.testing.assert_allclose(
+        jax.jit(second(loss))(x), jax.hessian(rosenbrock)(x), rtol=1e-12
+    )
+
+
+def test_a_hessian_costs_one_host_hessian_call(twice):
+    opener, loss = twice
+    jax.hessian(loss)(jnp.asarray(X0))
+    assert calls(opener)["hessian"] == 1
+    # The same point again is served from the Hessian cache.
+    jax.hessian(loss)(jnp.asarray(X0))
+    assert calls(opener)["hessian"] == 1
+
+
+def test_first_derivatives_do_not_ask_for_a_hessian(twice):
+    opener, loss = twice
+    x = jnp.asarray(X0)
+    jax.grad(loss)(x)
+    jax.linearize(loss, x)
+    assert calls(opener)["hessian"] == 0
+    np.testing.assert_allclose(
+        jax.grad(loss)(x), jax.grad(rosenbrock)(x), rtol=1e-13
+    )
+
+
+def test_hessian_under_vmap(twice):
+    _, loss = twice
+    points = jnp.asarray(X0) + jnp.linspace(-0.3, 0.3, 5)[:, None]
+    np.testing.assert_allclose(
+        jax.vmap(jax.hessian(loss))(points),
+        jax.vmap(jax.hessian(rosenbrock))(points),
+        rtol=1e-12,
+    )
+
+
+def test_wrong_hessian_shape_is_reported(request):
+    loss = host_loss(RosenbrockOpener(request.node.name, "wrong_hessian"))
+    with pytest.raises(Exception, match="hessian returned shape"):
+        jax.block_until_ready(jax.hessian(loss)(jnp.asarray(X0)))
 
 
 def test_wrong_gradient_shape_is_reported(request):

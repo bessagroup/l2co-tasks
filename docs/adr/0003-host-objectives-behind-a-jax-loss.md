@@ -30,6 +30,8 @@ callable that returns the objective. The objective has:
 - `value(x) -> float`;
 - optionally, `value_and_grad(x) -> (float, ndarray)`. Without it the
   task has no gradient.
+- optionally, `hessian(x) -> ndarray`, added later by ADR 0005. Without
+  it the loss cannot be differentiated twice.
 
 `x` is the model's parameters flattened to one float64 vector.
 
@@ -112,7 +114,8 @@ after 30 days.
 - **Every transformation works:** `grad`, `jvp`, `linearize` plus
   transpose, nested vmap, `lax.map`, `lax.scan`, and the nested
   callbacks of the scipy and IPOPT drivers. A Hessian fails loudly
-  ("Pure callbacks do not support JVP").
+  ("Pure callbacks do not support JVP"), unless the objective supplies
+  one (ADR 0005).
 - **Host calls against billed evaluations:** about 1:1, plus one
   unbilled evaluation of the starting population per realization.
   `lbfgs` sends 3 requests per billed evaluation, all at the same point,

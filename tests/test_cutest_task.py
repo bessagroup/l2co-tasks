@@ -225,6 +225,17 @@ def test_rosenbr_starts_at_its_prescribed_point(x64):
 
 
 @needs_cutest
+def test_rosenbr_hessian_is_cutests(x64):
+    """jax.hessian reaches CUTEst's own second derivatives (ADR 0005)."""
+    task = create_cutest_task("ROSENBR", global_min=0.0)
+    np.testing.assert_allclose(
+        jax.hessian(task.loss_fn)(task.model),
+        [[1330.0, 480.0], [480.0, 200.0]],
+        rtol=1e-12,
+    )
+
+
+@needs_cutest
 def test_tag_is_flat_and_complete():
     task = create_cutest_task("EXTROSNB", {"N": 5}, global_min=0.0)
     assert task.tag["task_name"] == "cutest"
