@@ -55,6 +55,14 @@ coordinates. `global_min` comes from a committed table; until a
 
 ::: l2co_tasks.create_cutest_task
 
+The sizes a problem lists, and the optimum its SIF file records for
+each, are read straight from the SIF file in `MASTSIF`, without pycutest.
+The experiment that builds the `global_min` table uses them.
+
+::: l2co_tasks.cutest_sizes
+
+::: l2co_tasks.cutest_soltn
+
 ## Estimating the global minimum
 
 Benchmark a task's best achievable loss with a short, seeded, multi-restart Adam search. This is how the supervised-learning and meta factories set their *empirical* `global_min`; it is also a standalone helper for custom tasks. A task with a `Box` is searched inside it.
