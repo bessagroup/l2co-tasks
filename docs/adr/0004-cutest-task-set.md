@@ -144,9 +144,30 @@ How a value is read for one size (`cutest_soltn`):
   generic `restart_sampler` parameter, passed in by the caller. Existing
   tasks keep their N(0, I) restarts, so their values and hashes don't
   change.
+- **The estimate must settle.** It is computed at a row's level and at
+  the next one up, and the two must agree within a tolerance relative to
+  `max(1, |estimate|)`. If they don't, the estimate escalates one level at
+  a time (each level doubles restarts and steps) up to a maximum level.
+  - A row that never settles is excluded. That is what catches a problem
+    unbounded below: no SIF file says so, and its estimate need not cross
+    any fixed threshold at a practical budget. FLETCBV3 at n = 100 fell
+    from −178,589 to −178,675 over four levels in a smoke run.
+  - The exception is a row whose estimates stay at or above a recorded
+    `SOLTN`. It is converging towards that optimum rather than diverging,
+    so it takes `SOLTN`, and the report lists it. EXTROSNB at n = 100
+    crept from 9e-5 to 1.5e-7 towards its recorded 0.
+  - The cost is at least twice one estimate per row; CUTEst evaluations
+    are microseconds, so this is seconds per row.
 - **Floor-test-guided estimation (ADR 0001) runs before the first
-  databank run.** A problem the floor test still breaches at the
-  estimator's maximum strength is excluded, with the reason recorded.
+  databank run,** as its own run on a scratch store: the whole `all`
+  suite on the provisional table, then a check of each task's lowest loss
+  against its `global_min`. Breached rows are re-estimated at a higher
+  level, and the real databank run happens once the table is final. Using
+  the real run as the floor test was rejected: its breached rows would
+  need their stored cells deleted. Checking against a strong subset was
+  rejected too: ADR 0001 asks for the whole suite. A problem the floor
+  test still breaches at the estimator's maximum strength is excluded,
+  with the reason recorded.
   The estimator stays standalone (optax only, ADR 0001). If the
   exclusion list turns out long, adding a derivative-free arm becomes a
   separate decision.
@@ -168,10 +189,14 @@ and committed.
   The table *is* the task set's problem list.
 - **Building a task is a lookup.** If the problem's SIF file no longer
   matches its row's hash, building refuses and says the table is stale.
-- **A new l2co_experiments experiment regenerates the table** under
-  sbatch. It parses `SOLTN`, runs the estimate, runs the floor test with
-  the whole `all` suite, and writes the table. The table reaches
-  l2co-tasks in a PR. It lives in l2co_experiments because it needs l2co,
+- **An excluded row may leave `n` empty.** A size that fails to build
+  has no known number of variables. A row with a value must give `n`.
+- **l2co_experiments' `cutest_global_min_table` experiment builds the
+  table** under sbatch. It lists the sizes, builds each one, estimates
+  until the estimate settles, takes the lower of that and `SOLTN`, and
+  writes the table. The floor test is a separate run (above), and the rows
+  it breaches come back through the experiment's `escalate` setting. The
+  table reaches l2co-tasks in a PR. It lives in l2co_experiments because it needs l2co,
   for the suite, and l2co-optimizers, for the sampler, and l2co-tasks may
   import neither.
 
