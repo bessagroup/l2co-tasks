@@ -72,7 +72,8 @@ _TABLE_PATH = Path(__file__).with_name("cutest_global_min.csv")
 #: Its columns, in order. ``sif_params`` is the canonical string
 #: (:func:`_sif_params_str`); ``source`` is ``"estimate"`` or ``"soltn"``;
 #: ``excluded`` is empty, or the reason the problem is left out, in which
-#: case ``global_min`` is empty.
+#: case ``global_min`` is empty. ``n`` may be empty only on an excluded
+#: row: a size that fails to build has no known number of variables.
 _TABLE_COLUMNS = (
     "problem",
     "sif_params",
@@ -122,7 +123,7 @@ def _sif_sha256(problem: str) -> str:
 class _TableRow:
     """One row of the ``global_min`` table; see :data:`_TABLE_COLUMNS`."""
 
-    n: int
+    n: int | None
     sif_sha256: str
     global_min: float | None
     source: str
@@ -144,8 +145,13 @@ def _read_table(path: Path) -> dict[tuple[str, str], _TableRow]:
             key = (record["problem"], record["sif_params"])
             if key in rows:
                 raise ValueError(f"{path} lists {key} twice")
+            if not record["n"] and not record["excluded"]:
+                raise ValueError(
+                    f"{path} gives {key} no n; only an excluded row may "
+                    "leave it empty"
+                )
             rows[key] = _TableRow(
-                n=int(record["n"]),
+                n=int(record["n"]) if record["n"] else None,
                 sif_sha256=record["sif_sha256"],
                 global_min=(
                     float(record["global_min"])

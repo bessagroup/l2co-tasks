@@ -9,6 +9,7 @@ skips without them, as it does in CI.
 
 from __future__ import annotations
 
+import csv
 import sys
 
 import cloudpickle
@@ -46,9 +47,11 @@ needs_cutest = pytest.mark.skipif(
 
 
 def _write_table(path, rows):
-    lines = [",".join(_TABLE_COLUMNS)]
-    lines += [",".join(str(v) for v in row) for row in rows]
-    path.write_text("\n".join(lines) + "\n")
+    # csv quoting matters: a SIF-parameter string like "M=2,N=2" has a comma.
+    with path.open("w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(_TABLE_COLUMNS)
+        writer.writerows(rows)
     return path
 
 
@@ -92,6 +95,19 @@ def test_table_listing_a_size_twice_is_refused(tmp_path):
     row = ("ROSENBR", "", 2, "abc", 0.0, "soltn", "")
     path = _write_table(tmp_path / "dup.csv", [row, row])
     with pytest.raises(ValueError, match="twice"):
+        _read_table(path)
+
+
+def test_size_that_never_built_may_have_no_n(table):
+    table([("JIMACK", "M=2,N=2", "", "sha", "", "", "fails to build: x")])
+    with pytest.raises(ValueError, match="fails to build"):
+        _table_global_min("JIMACK", "M=2,N=2", "sha")
+
+
+def test_valued_row_without_n_is_refused(tmp_path):
+    row = ("ROSENBR", "", "", "sha", 0.0, "soltn", "")
+    path = _write_table(tmp_path / "no_n.csv", [row])
+    with pytest.raises(ValueError, match="only an excluded row"):
         _read_table(path)
 
 
