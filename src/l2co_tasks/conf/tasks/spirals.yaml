@@ -23,7 +23,3 @@ data_generator:
 schema:
   # Feature schema used by FeatureProcessor to encode task metadata for the model
   dimensionality: continuous
-
-# Optimization domain (RNN parameters are unconstrained). Set to a
-# [lower, upper] for bounded tasks, omit (or null) for unbounded.
-bounded:

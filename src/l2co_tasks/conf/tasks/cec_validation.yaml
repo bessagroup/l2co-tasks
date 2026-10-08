@@ -61,5 +61,3 @@ schema:
   multimodal: boolean
   composition: boolean
   rotated: boolean
-
-bounded:

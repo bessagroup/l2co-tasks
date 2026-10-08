@@ -48,6 +48,3 @@ schema:
   dimensionality: continuous
   separable: boolean
   unimodal: boolean
-
-# [lower, upper] for bounded tasks, omit (or null) for unbounded.
-bounded:

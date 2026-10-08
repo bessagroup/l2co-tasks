@@ -3,7 +3,9 @@
 This is a bi-level task whose parameters are *not* network weights but
 three Adam hyperparameters. The model is a 3-vector in ``[0, 1]^3``
 that is decoded into a learning rate ``10^(-5 + 7 * x0)`` and momenta
-``b1 = 0.85 + 0.15 * x1`` and ``b2 = 0.85 + 0.15 * x2``.
+``b1 = 0.85 + 0.149 * x1`` and ``b2 = 0.85 + 0.149 * x2``, so both stay
+in ``[0.85, 0.999]``. The box ``[0, 1]^3`` is part of the task (a
+:class:`~l2co_tasks.Box`, ADR 0002).
 
 Evaluating the loss runs an inner optimisation: it trains a fresh MLP
 classifier with Adam, using the decoded hyperparameters, for
@@ -44,6 +46,7 @@ import jax.random as jr
 import optax
 from jaxtyping import PyTree
 
+from .constraints import Box
 from .global_min import estimate_global_min as _estimate_global_min
 from .task import Task, dataset_dict
 from .task_gaussian_class import generate_one_gaussian_dataset, save_dataset
@@ -61,13 +64,15 @@ def scale_adam_params(unit_params: jax.Array) -> PyTree:
     -------
     PyTree
         Dict with ``learning_rate`` (log-scaled), ``b1``,
-        and ``b2`` (linearly scaled to ``[0.85, 1.0]``).
+        and ``b2`` (linearly scaled to ``[0.85, 0.999]``).
     """
     learning_rate = 10 ** (-5 + unit_params[0] * (2 - (-5)))
 
-    # Scale b1 and b2 linearly between 0.85 and 1.0
-    b1 = 0.85 + unit_params[1] * (1.0 - 0.85)
-    b2 = 0.85 + unit_params[2] * (1.0 - 0.85)
+    # Scale b1 and b2 linearly between 0.85 and 0.999. The range stops
+    # short of 1: at b = 1 Adam's bias correction is 0/0 (NaN), and the
+    # task's box makes its upper face reachable (ADR 0002).
+    b1 = 0.85 + unit_params[1] * (0.999 - 0.85)
+    b2 = 0.85 + unit_params[2] * (0.999 - 0.85)
 
     return {
         "learning_rate": learning_rate,
@@ -230,20 +235,22 @@ def create_gaussian_meta_task(
 
         return final_loss
 
+    # The outer parameters only mean something inside [0, 1]^3 (outside
+    # it, b1/b2 pass 1), so the box is part of the task (ADR 0002). The
+    # starting model sits on its lower corner.
     task = Task(
         model=outer_model,
         loss_fn=partial(inner_loop, key=model_key, inner_steps=inner_steps),
         dataset=dataset_dict(_path, None),
         tag=tag,
+        constraints=[Box(0.0, 1.0)],
     )
 
     if estimate_global_min:
-        # The outer parameters live in [0, 1]^3, so clip restarts back
-        # into the box; a slightly larger lr moves the 3-vector
-        # meaningfully within the step budget.
+        # The estimator searches inside the task's box; a slightly larger
+        # lr moves the 3-vector meaningfully within the step budget.
         gmin = _estimate_global_min(
             task,
-            clip_to_unit=True,
             seed=seed,
             n_restarts=global_min_restarts,
             n_steps=global_min_steps,

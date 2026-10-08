@@ -20,17 +20,23 @@ full-batch loss observed. Each restart trains the trainable
 (inexact-array) leaves of the model on the task's full-batch loss. Two
 complementary search arms are taken per restart and minimised over:
 
-* a **cosine-annealed Adam** arm (unit-box tasks are clipped back into
-  ``[0, 1]`` after every step) -- this provides *breadth*, and is the
-  only arm on unit-box tasks, where resampled restarts approximate a
-  global search of the low-dimensional box;
+* a **cosine-annealed Adam** arm (on a task with a
+  :class:`~l2co_tasks.Box`, parameters are clipped back into the box
+  after every step) -- this provides *breadth*, and is the only arm on
+  boxed tasks, where resampled restarts approximate a global search of
+  the low-dimensional box;
 * an **L-BFGS** arm on the unbounded weight-space tasks -- this provides
   *depth*: a quasi-Newton search to (near-)convergence, which is what
   makes ``global_min`` an actual lower bound against the stronger
   optimisers in the downstream portfolio (see ``CONTEXT.md`` and
   ``docs/adr/0001-global-min-is-a-floor-validated-against-all.md``). It
-  is skipped on unit-box tasks, where its line search fights the
+  is skipped on boxed tasks, where its line search fights the
   projection.
+
+The box comes from the task itself (``docs/adr/0002``): a task that
+declares a ``Box`` is searched inside it, and a task with an inequality
+or equality constraint is refused, since this search can't respect
+one.
 
 The floor-test battery (``tests/test_global_min_floor.py``) is the oracle
 for whether the resulting value is genuinely a floor; estimator strength
@@ -55,6 +61,7 @@ import jax.tree_util as jtu
 import optax
 
 # Local
+from .constraints import Box
 from .task import Task
 
 # =============================================================================
@@ -78,12 +85,12 @@ def _finite(loss: jax.Array) -> jax.Array:
     return jnp.where(jnp.isfinite(loss), loss, jnp.inf)
 
 
-def _resample_leaves(model, key: jax.Array, clip_to_unit: bool):
+def _resample_leaves(model, key: jax.Array, box: Box | None):
     """Return ``model`` with its inexact-array leaves freshly sampled.
 
     Mirrors ``sample_model`` in the test contract helpers: unbounded
-    (weight-space) tasks draw from a standard normal, unit-box tasks draw
-    uniformly from ``[0, 1]`` so the restart respects the boundaries.
+    (weight-space) tasks draw from a standard normal, boxed tasks draw
+    uniformly from the box so the restart respects its bounds.
 
     Parameters
     ----------
@@ -91,8 +98,9 @@ def _resample_leaves(model, key: jax.Array, clip_to_unit: bool):
         Model whose structure is used as the template.
     key : jax.Array
         Random key.
-    clip_to_unit : bool
-        Whether the task is optimised over the unit box ``[0, 1]^d``.
+    box : Box or None
+        The task's box, already cast to the model's parameters, or
+        ``None`` for an unbounded task.
 
     Returns
     -------
@@ -102,18 +110,53 @@ def _resample_leaves(model, key: jax.Array, clip_to_unit: bool):
     params, static = eqx.partition(model, eqx.is_inexact_array)
     leaves, treedef = jtu.tree_flatten(params)
     keys = jr.split(key, len(leaves))
-    pairs = zip(leaves, keys, strict=True)
-    if clip_to_unit:
-        new = [jr.uniform(k, x.shape, x.dtype) for x, k in pairs]
+    if box is None:
+        new = [
+            jr.normal(k, x.shape, x.dtype)
+            for x, k in zip(leaves, keys, strict=True)
+        ]
     else:
-        new = [jr.normal(k, x.shape, x.dtype) for x, k in pairs]
+        lower = jtu.tree_leaves(box.lower)
+        upper = jtu.tree_leaves(box.upper)
+        new = [
+            jr.uniform(k, x.shape, x.dtype, minval=lo, maxval=hi)
+            for x, k, lo, hi in zip(leaves, keys, lower, upper, strict=True)
+        ]
     return eqx.combine(jtu.tree_unflatten(treedef, new), static)
+
+
+def _search_box(task: Task) -> Box | None:
+    """The box to search ``task`` in, or ``None`` if it has none.
+
+    Raises
+    ------
+    ValueError
+        If the task has an inequality or equality constraint, which this
+        search can't respect, or a box with an infinite bound, which
+        restarts can't be drawn uniformly from.
+    """
+    unsupported = [c for c in task.constraints if not isinstance(c, Box)]
+    if unsupported:
+        names = ", ".join(f"{c.kind} {c.name!r}" for c in unsupported)
+        raise ValueError(
+            "estimate_global_min can only respect a Box, but the task "
+            f"also has {names}"
+        )
+    if not task.constraints:
+        return None
+    (box,) = task.constraints
+    bounds = jtu.tree_leaves((box.lower, box.upper))
+    if not all(bool(jnp.all(jnp.isfinite(b))) for b in bounds):
+        raise ValueError(
+            "estimate_global_min draws restarts uniformly from the task's "
+            "Box, so every bound must be finite"
+        )
+    return box
 
 
 def estimate_global_min(
     task: Task,
     *,
-    clip_to_unit: bool = False,
     seed: int = 0,
     n_restarts: int = 3,
     n_steps: int = 1000,
@@ -129,32 +172,32 @@ def estimate_global_min(
 
     * a cosine-annealed **Adam** arm of ``n_steps`` steps (breadth);
     * an **L-BFGS** arm of ``lbfgs_steps`` steps (depth) -- only on
-      unbounded weight-space tasks (``clip_to_unit=False``), where it
-      drives the estimate to a genuine lower bound against the stronger
-      portfolio optimisers. It is skipped when ``clip_to_unit=True`` (its
-      line search fights the projection) or when ``use_lbfgs=False``.
+      tasks without a :class:`~l2co_tasks.Box`, where it drives the
+      estimate to a genuine lower bound against the stronger portfolio
+      optimisers. It is skipped on a boxed task (its line search fights
+      the projection) or when ``use_lbfgs=False``.
 
     The result is the "empirical" ``global_min`` recorded by the
     supervised-learning and meta factories.
 
     The first restart starts from ``task.model`` (the factory's
     initialised weights), which is usually a strong starting point; the
-    remaining restarts start from resampled leaves for diversity. For
-    unit-box tasks (``clip_to_unit=True``) *every* restart is resampled,
-    since the factory's initial model sits at the box corner where the
-    projected step can stall, and resampled restarts approximate a global
-    search of the (low-dimensional) box.
+    remaining restarts start from resampled leaves for diversity. On a
+    boxed task the Adam steps are clipped into the box and *every*
+    restart is drawn uniformly from it, since the factory's initial model
+    may sit at the box corner where the projected step can stall, and
+    resampled restarts approximate a global search of the
+    (low-dimensional) box. The box is the task's own: there is no
+    separate flag for it (``docs/adr/0002``).
 
     Parameters
     ----------
     task : Task
         The task to benchmark. Its ``loss_fn``, ``pass_rng``, ``has_aux``
         and ``loaded_dataset`` define the objective via the canonical
-        ``loss_fn(model, [key=...], **dataset)`` contract.
-    clip_to_unit : bool, optional
-        Project parameters back into ``[0, 1]`` after each step (for
-        tasks optimised over the unit box, e.g. the Adam-meta task), by
-        default ``False``. Also disables the L-BFGS arm.
+        ``loss_fn(model, [key=...], **dataset)`` contract. A
+        :class:`~l2co_tasks.Box` in its ``constraints`` is searched
+        inside.
     seed : int, optional
         Seed for restart initialisation and per-step keys; makes the
         estimate deterministic, by default 0.
@@ -166,7 +209,8 @@ def estimate_global_min(
         Initial (peak) learning rate of the cosine-decay schedule, by
         default 1e-2.
     use_lbfgs : bool, optional
-        Run the L-BFGS depth arm on unbounded tasks, by default ``True``.
+        Run the L-BFGS depth arm on tasks without a box, by default
+        ``True``.
     lbfgs_steps : int or None, optional
         Number of L-BFGS steps per restart; defaults to
         ``_LBFGS_DEFAULT_STEPS`` (a convergence budget independent of the
@@ -178,7 +222,14 @@ def estimate_global_min(
     -------
     float
         The lowest loss found -- the estimated global minimum.
+
+    Raises
+    ------
+    ValueError
+        If the task has an inequality or equality constraint, or a box
+        with an infinite bound.
     """
+    box = _search_box(task)
     n_steps = max(int(n_steps), 1)
     n_restarts = max(int(n_restarts), 1)
     if lbfgs_steps is None:
@@ -186,9 +237,9 @@ def estimate_global_min(
     else:
         lbfgs_steps = max(int(lbfgs_steps), 1)
     # L-BFGS is a sound *strong* arm only on unbounded weight-space tasks;
-    # on unit-box tasks its line search fights the projection, so breadth
+    # on boxed tasks its line search fights the projection, so breadth
     # (resampled Adam restarts) sets the floor there instead.
-    run_lbfgs = bool(use_lbfgs) and not clip_to_unit
+    run_lbfgs = bool(use_lbfgs) and box is None
     # Materialise the dataset once so the loss closure is a clean
     # function of the model alone (no file I/O baked into the trace).
     dataset = {k: jnp.asarray(v) for k, v in task.loaded_dataset.items()}
@@ -219,8 +270,8 @@ def estimate_global_min(
             )
             updates, opt_state = opt.update(grads, opt_state, params)
             params = eqx.apply_updates(params, updates)
-            if clip_to_unit:
-                params = jtu.tree_map(lambda x: jnp.clip(x, 0.0, 1.0), params)
+            if box is not None:
+                params = jtu.tree_map(jnp.clip, params, box.lower, box.upper)
             return (params, opt_state, jnp.minimum(best, _finite(loss))), None
 
         init = (params, opt_state, jnp.asarray(jnp.inf))
@@ -267,10 +318,10 @@ def estimate_global_min(
     best_overall = jnp.asarray(jnp.inf)
     for r in range(n_restarts):
         rk = restart_keys[r]
-        if r == 0 and not clip_to_unit:
+        if r == 0 and box is None:
             start = task.model
         else:
-            start = _resample_leaves(task.model, rk, clip_to_unit)
+            start = _resample_leaves(task.model, rk, box)
         best_overall = jnp.minimum(best_overall, run_restart(start, rk))
         if run_lbfgs:
             best_overall = jnp.minimum(

@@ -24,6 +24,8 @@ rl2co repository.
 
 from __future__ import annotations
 
+import dataclasses
+
 import equinox as eqx
 import jax.numpy as jnp
 import jax.random as jr
@@ -36,6 +38,8 @@ from l2co import OptimizationStep, RolloutWrapper, init_run_state  # noqa: E402
 from l2co.history import BatchState  # noqa: E402
 from l2co.optimization import run  # noqa: E402
 from l2co.sampling import normal_sampling, random_sampling  # noqa: E402
+
+from l2co_tasks import Box, Task  # noqa: E402
 
 from ._contract_utils import evaluate_task_loss  # noqa: E402
 from .task_cases import CASE_BY_ID  # noqa: E402
@@ -71,11 +75,16 @@ def _params(case_id: str) -> list:
     )
 
 
-def _bounded(case_id: str) -> tuple[float | None, float | None]:
-    """Parameter bounds matching the case's domain."""
-    if CASE_BY_ID[case_id].domain == "unit":
-        return (0.0, 1.0)
-    return (None, None)
+def _in_domain(task: Task, case_id: str) -> Task:
+    """``task`` with the box its case's domain implies.
+
+    Bounds come from the task (l2co ADR 0020). A unit-domain task that
+    doesn't declare its box (BBOB) gets ``Box(0, 1)`` here; one that
+    does (gaussian-meta) is returned unchanged.
+    """
+    if CASE_BY_ID[case_id].domain == "unit" and not task.constraints:
+        return dataclasses.replace(task, constraints=[Box(0.0, 1.0)])
+    return task
 
 
 def _optimizer() -> OptimizationStep:
@@ -89,7 +98,7 @@ def _rollout(task, case_id: str, key) -> RolloutWrapper:
     """Build a RolloutWrapper with domain-matched sampler and bounds.
 
     ``batch_evaluate`` resets each realization's parameters with the
-    sampler, and samplers do not clip to ``bounded`` -- unit-domain
+    sampler, and samplers do not clip to the task's box -- unit-domain
     tasks therefore use the uniform ``random_sampling`` so the reset
     starts inside the box (out-of-box starts can be NaN, e.g. the
     gaussian-meta task decodes adam's ``b2 > 1`` from ``x > 1``).
@@ -100,7 +109,6 @@ def _rollout(task, case_id: str, key) -> RolloutWrapper:
         task=task,
         sampler=random_sampling if unit else normal_sampling,
         key=key,
-        bounded=_bounded(case_id),
     )
 
 
@@ -113,11 +121,10 @@ def test_runstate_init(case_id, build_case):
     verbatim and the sampler reset in ``evaluate``/``batch_evaluate``
     replaces them. This test pins that init mechanic.
     """
-    task = build_case(case_id)
+    task = _in_domain(build_case(case_id), case_id)
     rs = init_run_state(
         optimizer=_optimizer(),
         task=task,
-        bounded=_bounded(case_id),
         key=jr.key(0),
     )
     assert rs.best_loss == jnp.inf
@@ -139,7 +146,7 @@ def test_runstate_init(case_id, build_case):
 @pytest.mark.parametrize("case_id", [_params(i) for i in INTEGRATION_IDS])
 def test_rollout_short_run_is_finite(case_id, build_case):
     """A short ``batch_evaluate`` produces finite history and best loss."""
-    task = build_case(case_id)
+    task = _in_domain(build_case(case_id), case_id)
     rollout = _rollout(task, case_id, jr.key(1))
     run_state, _, history = rollout.batch_evaluate(
         key=jr.key(2),
@@ -166,11 +173,10 @@ def test_run_matches_contract_replica(case_id, build_case):
     reproduce l2co's recorded ``best_loss`` exactly (deterministic,
     dataset-free tasks only).
     """
-    task = build_case(case_id)
+    task = _in_domain(build_case(case_id), case_id)
     rs = init_run_state(
         optimizer=_optimizer(),
         task=task,
-        bounded=_bounded(case_id),
         key=jr.key(3),
     )
     bs = BatchState.init(
@@ -193,8 +199,8 @@ def test_run_matches_contract_replica(case_id, build_case):
 
 @pytest.mark.parametrize("case_id", [_params(i) for i in UNIT_IDS])
 def test_bounded_unit_tasks_stay_in_box(case_id, build_case):
-    """With ``bounded=(0, 1)`` the best parameters stay in the unit box."""
-    task = build_case(case_id)
+    """With the task's ``Box(0, 1)`` the best parameters stay in it."""
+    task = _in_domain(build_case(case_id), case_id)
     rollout = _rollout(task, case_id, jr.key(5))
     run_state, _, _ = rollout.batch_evaluate(
         key=jr.key(6),

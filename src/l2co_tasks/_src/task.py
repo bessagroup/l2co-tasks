@@ -23,6 +23,11 @@ from jaxtyping import PyTree
 
 # Local
 from ._io import load_dataset
+from .constraints import (
+    Constraint,
+    constraints_identity,
+    resolve_constraints,
+)
 
 #                                                          Authorship & Credits
 # =============================================================================
@@ -129,6 +134,14 @@ class Task(eqx.Module):
         Dataset information, or ``None`` if the task has no dataset.
     tag : dict[str, Any]
         Metadata tags for the task.
+    constraints : tuple[Constraint, ...]
+        Equality, inequality and box constraints on the model's
+        parameters (ADR 0002). Any iterable is accepted and stored as a
+        tuple; empty (the default) means unconstrained. When the task is
+        built, the constraints are checked against ``model`` and a
+        :class:`Box` given as single numbers is cast to the model's
+        parameters. Constraints are part of the task's identity only
+        when present, so an unconstrained task's ``hash`` is unchanged.
     """
 
     model: PyTree
@@ -138,6 +151,10 @@ class Task(eqx.Module):
     has_aux: bool = eqx.field(static=True, default=False)
     dataset: DatasetDict | None = eqx.field(default=None, static=True)
     tag: dict[str, Any] = eqx.field(default_factory=dict, static=True)
+    constraints: tuple[Constraint, ...] = ()
+
+    def __post_init__(self):
+        self.constraints = resolve_constraints(self.model, self.constraints)
 
     @property
     def loaded_dataset(self) -> dict[str, Any]:
@@ -231,6 +248,13 @@ class Task(eqx.Module):
         # Add global_min to the hashable tag
         tag_hashable["global_min"] = self.global_min
 
+        # Constraints join identity only when present, so the hash of an
+        # unconstrained task does not change (ADR 0002).
+        if self.constraints:
+            tag_hashable["constraints"] = constraints_identity(
+                self.constraints
+            )
+
         # Use frozenset for order independence
         return frozenset(tag_hashable.items())
 
@@ -284,6 +308,11 @@ class Task(eqx.Module):
             Fully assembled Task.
         """
         loss_fn = cloudpickle.loads(bytes.fromhex(hyperparams["loss_fn"]))
+        constraints = (
+            cloudpickle.loads(bytes.fromhex(hyperparams["constraints"]))
+            if "constraints" in hyperparams
+            else ()
+        )
         return cls(
             model=model,
             loss_fn=loss_fn,
@@ -292,6 +321,7 @@ class Task(eqx.Module):
             has_aux=hyperparams["has_aux"],
             dataset=hyperparams.get("dataset"),
             tag=hyperparams.get("tag", {}),
+            constraints=constraints,
         )
 
     @staticmethod
@@ -301,8 +331,9 @@ class Task(eqx.Module):
 
         The file format mirrors :class:`Stage1Loader`: the first line is a
         UTF-8 JSON header containing all metadata (loss function, dataset
-        reference, tags, model shape), followed immediately by the binary
-        leaf data written by ``eqx.tree_serialise_leaves``.  The dataset
+        reference, tags, model shape, and the constraints if there are
+        any), followed immediately by the binary leaf data written by
+        ``eqx.tree_serialise_leaves``.  The dataset
         ``.npz`` file is **not** copied — only its path is stored in the
         header, so the dataset is stored only once on disk.
 
@@ -365,7 +396,7 @@ class Task(eqx.Module):
             dataset = dict(self.dataset)
             dataset["dataset_path"] = str(Path(self.dataset["dataset_path"]))
 
-        return {
+        header = {
             "model_shape_hex": model_shape_hex,
             "loss_fn": loss_fn_hex,
             "pass_rng": self.pass_rng,
@@ -374,6 +405,11 @@ class Task(eqx.Module):
             "dataset": dataset,
             "tag": self.tag,
         }
+        # Written only when present, so an unconstrained task's file is
+        # byte-for-byte what it was before constraints existed.
+        if self.constraints:
+            header["constraints"] = cloudpickle.dumps(self.constraints).hex()
+        return header
 
     @classmethod
     def load(cls, filepath: str) -> Task:

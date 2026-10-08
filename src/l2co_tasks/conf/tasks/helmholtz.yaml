@@ -22,6 +22,3 @@ schema:
   dimensionality: continuous
   task_name:
     - helmholtz
-
-# Optimization domain (PINN parameters are unconstrained).
-bounded:
