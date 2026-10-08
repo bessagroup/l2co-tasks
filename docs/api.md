@@ -31,7 +31,8 @@ inequality or equality, since nothing downstream can enforce those yet.
 
 A task whose objective is computed outside JAX, such as compiled Fortran
 or a simulator, wraps it with `host_loss` into an ordinary loss that
-every optimizer can trace, vectorize and differentiate (ADR 0003). The
+every optimizer can trace, vectorize and differentiate (ADR 0003), twice
+when the objective supplies its Hessian (ADR 0005). The
 suite's adapter supplies an *opener*: a picklable, hashable,
 zero-argument callable returning a `HostObjective`. The objective is
 opened once per process, the first time the loss is traced.

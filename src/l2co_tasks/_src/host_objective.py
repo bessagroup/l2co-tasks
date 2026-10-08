@@ -10,8 +10,10 @@ a :class:`~l2co_tasks.Task` needs to know (ADR 0003).
 An adapter for one suite supplies an *opener*: a picklable, hashable,
 zero-argument callable that returns the objective. The objective has
 ``value(x) -> float`` and, optionally, ``value_and_grad(x) -> (float,
-ndarray)``; ``x`` is the model's floating-point parameters flattened into
-one float64 vector. Without ``value_and_grad`` the task has no gradient.
+ndarray)`` and ``hessian(x) -> ndarray``; ``x`` is the model's
+floating-point parameters flattened into one float64 vector. Without
+``value_and_grad`` the task has no gradient; without ``hessian`` it has
+no second derivatives (ADR 0005).
 
 How the loss behaves:
 
@@ -20,13 +22,19 @@ How the loss behaves:
   derivative rule asks the host for value and gradient in one call. It has
   to be ``custom_jvp``: optimistix takes gradients in forward mode
   (``jax.linearize``), which a ``custom_vjp`` does not support.
+* **Second derivatives, when the objective has them.** The gradient in
+  that rule is itself a ``custom_jvp``, whose rule asks the host for the
+  dense Hessian. ``jax.hessian`` of the loss therefore makes one host
+  Hessian call. First derivatives compute exactly what they did before
+  (ADR 0005).
 * **Batched under vmap.** Every point of a vmapped population, across
   every realization, reaches the host in one callback, which evaluates
   them one at a time.
 * **Last-point caches, one per kind of request.** A value request for
-  the point last asked for a value, or a value-and-gradient request for
-  the point last asked for both, is answered from the cache: optimizers
-  often ask twice in a row. The two kinds never answer for each other,
+  the point last asked for a value, a value-and-gradient request for the
+  point last asked for both, or a Hessian request for the point last
+  asked for one, is answered from the cache: optimizers often ask twice
+  in a row. The kinds never answer for each other,
   because an objective's value and value-and-gradient routines may differ
   in the last bit; mixing them would make a run's numbers depend on what
   ran before it in the same process.
@@ -85,7 +93,10 @@ class HostObjective(Protocol):
     gradient defines ``value_and_grad(x) -> (float, ndarray)``, returning
     the value and the gradient with ``x``'s shape from one evaluation;
     without it, the task has no gradient and differentiating its loss
-    raises :class:`TypeError`.
+    raises :class:`TypeError`. One that can also supply second
+    derivatives defines ``hessian(x) -> ndarray``, the dense ``(n, n)``
+    Hessian from one evaluation; without it, differentiating the loss
+    twice raises :class:`TypeError` (ADR 0005).
 
     Both methods receive ``x`` as a one-dimensional float64 array, the
     model's floating-point parameters flattened in
@@ -116,6 +127,8 @@ class _OpenObjective:
         The objective the opener returned.
     differentiable : bool
         Whether the objective supplies ``value_and_grad``.
+    twice_differentiable : bool
+        Whether it also supplies ``hessian``.
     fn : Callable
         ``fn(x) -> loss`` for a flat parameter vector ``x``: the traced
         function behind every :class:`HostLoss` with this opener.
@@ -127,10 +140,14 @@ class _OpenObjective:
         self.differentiable = callable(
             getattr(self.objective, "value_and_grad", None)
         )
+        self.twice_differentiable = self.differentiable and callable(
+            getattr(self.objective, "hessian", None)
+        )
         # One last-point cache per kind of request; see the module
         # docstring for why a value is never served from a gradient call.
         self._value_cache: tuple[bytes, float] | None = None
         self._grad_cache: tuple[bytes, float, np.ndarray] | None = None
+        self._hessian_cache: tuple[bytes, np.ndarray] | None = None
         self.fn = _traced(self)
 
     def value(self, x: np.ndarray) -> float:
@@ -154,6 +171,29 @@ class _OpenObjective:
                 )
             self._grad_cache = (key, float(f), g)
         return self._grad_cache[1], self._grad_cache[2]
+
+    def hessian(self, x: np.ndarray) -> np.ndarray:
+        """The Hessian at ``x``, in one host evaluation; cached if the last
+        Hessian request was ``x``."""
+        key = x.tobytes()
+        if self._hessian_cache is None or self._hessian_cache[0] != key:
+            h = np.asarray(self.objective.hessian(x), dtype=np.float64)
+            if h.shape != (x.size, x.size):
+                raise ValueError(
+                    f"{self._opener!r}: hessian returned shape {h.shape} for "
+                    f"a point of shape {x.shape}"
+                )
+            self._hessian_cache = (key, h)
+        return self._hessian_cache[1]
+
+    def no_hessian(self) -> TypeError:
+        """The error for differentiating twice without a Hessian."""
+        return TypeError(
+            f"{self._opener!r} opens a host objective without hessian, so "
+            "this task has no second derivatives: jax.hessian of its loss, "
+            "or an optimizer that needs exact Hessians, cannot run on it "
+            "(ADR 0005)"
+        )
 
     def no_gradient(self) -> TypeError:
         """The error for differentiating an objective without a gradient."""
@@ -201,8 +241,46 @@ def _host_value_and_grad(
     )
 
 
+def _host_hessian(opened: _OpenObjective, x: np.ndarray) -> np.ndarray:
+    """Host side of the Hessian callback; ``(..., n)`` to ``(..., n, n)``."""
+    points = np.asarray(x, dtype=np.float64)
+    rows = points.reshape(-1, points.shape[-1])
+    h = np.empty((rows.shape[0], rows.shape[1], rows.shape[1]))
+    with _LOCK:
+        for i, row in enumerate(rows):
+            h[i] = opened.hessian(row)
+    return h.reshape(points.shape + points.shape[-1:]).astype(x.dtype)
+
+
 def _traced(opened: _OpenObjective) -> Callable:
     """The traceable, differentiable ``x -> loss`` for one objective."""
+
+    @jax.custom_jvp
+    def value_and_grad(x: jax.Array) -> tuple[jax.Array, jax.Array]:
+        return jax.pure_callback(
+            functools.partial(_host_value_and_grad, opened),
+            (
+                jax.ShapeDtypeStruct((), x.dtype),
+                jax.ShapeDtypeStruct(x.shape, x.dtype),
+            ),
+            x,
+            vmap_method="expand_dims",
+        )
+
+    @value_and_grad.defjvp
+    def value_and_grad_jvp(primals, tangents):
+        # Reached only when the loss is differentiated twice.
+        (x,), (t,) = primals, tangents
+        if not opened.twice_differentiable:
+            raise opened.no_hessian()
+        f, g = value_and_grad(x)
+        h = jax.pure_callback(
+            functools.partial(_host_hessian, opened),
+            jax.ShapeDtypeStruct(x.shape + x.shape, x.dtype),
+            x,
+            vmap_method="expand_dims",
+        )
+        return (f, g), (jnp.dot(g, t), h @ t)
 
     @jax.custom_jvp
     def fn(x: jax.Array) -> jax.Array:
@@ -218,15 +296,7 @@ def _traced(opened: _OpenObjective) -> Callable:
         (x,), (t,) = primals, tangents
         if not opened.differentiable:
             raise opened.no_gradient()
-        f, g = jax.pure_callback(
-            functools.partial(_host_value_and_grad, opened),
-            (
-                jax.ShapeDtypeStruct((), x.dtype),
-                jax.ShapeDtypeStruct(x.shape, x.dtype),
-            ),
-            x,
-            vmap_method="expand_dims",
-        )
+        f, g = value_and_grad(x)
         return f, jnp.dot(g, t)
 
     return fn
@@ -295,7 +365,9 @@ def host_loss(opener: Callable[[], HostObjective]) -> HostLoss:
 
     The returned loss is traceable, vmappable and -- when the objective
     supplies ``value_and_grad`` -- differentiable in forward and reverse
-    mode, so every optimizer can run on the task (ADR 0003). Pass it as
+    mode, so every optimizer can run on the task (ADR 0003). When it also
+    supplies ``hessian``, the loss can be differentiated twice
+    (``jax.hessian``; ADR 0005). Pass it as
     ``Task(loss_fn=host_loss(opener), ...)`` with ``pass_rng=False``, no
     dataset and ``has_aux=False``.
 
