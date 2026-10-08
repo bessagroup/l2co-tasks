@@ -22,6 +22,7 @@ from ._src.experimentdata import create_tasks_experimentdata
 from ._src.gaussian_meta import create_gaussian_meta_task
 from ._src.global_min import estimate_global_min
 from ._src.helmholtz import HelmholtzTaskSampler, create_helmholtz_task
+from ._src.host_objective import HostLoss, HostObjective, host_loss
 from ._src.inviscid_burgers import (
     InviscidBurgersTaskSampler,
     create_inviscid_burgers_task,
@@ -55,6 +56,8 @@ __all__ = [
     "Equality",
     "EulerTaskSampler",
     "HelmholtzTaskSampler",
+    "HostLoss",
+    "HostObjective",
     "Inequality",
     "InviscidBurgersTaskSampler",
     "PDETaskSampler",
@@ -82,5 +85,6 @@ __all__ = [
     "create_tasks_experimentdata",
     "create_viscous_burgers_task",
     "estimate_global_min",
+    "host_loss",
     "retrieve_tasks",
 ]

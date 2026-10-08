@@ -27,6 +27,21 @@ inequality or equality, since nothing downstream can enforce those yet.
 
 ::: l2co_tasks.Box
 
+## Host objectives
+
+A task whose objective is computed outside JAX, such as compiled Fortran
+or a simulator, wraps it with `host_loss` into an ordinary loss that
+every optimizer can trace, vectorize and differentiate (ADR 0003). The
+suite's adapter supplies an *opener*: a picklable, hashable,
+zero-argument callable returning a `HostObjective`. The objective is
+opened once per process, the first time the loss is traced.
+
+::: l2co_tasks.host_loss
+
+::: l2co_tasks.HostObjective
+
+::: l2co_tasks.HostLoss
+
 ## Estimating the global minimum
 
 Benchmark a task's best achievable loss with a short, seeded, multi-restart Adam search. This is how the supervised-learning and meta factories set their *empirical* `global_min`; it is also a standalone helper for custom tasks. A task with a `Box` is searched inside it.
