@@ -17,8 +17,10 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from f3dasm import ExperimentData
+from f3dasm.design import Domain
 
-from l2co_tasks import Task, create_cutest_task
+from l2co_tasks import CutestTableSampler, Task, create_cutest_task
 from l2co_tasks._src import cutest_task
 from l2co_tasks._src.cutest_task import (
     _TABLE_COLUMNS,
@@ -77,6 +79,50 @@ def test_sif_params_have_one_canonical_string():
     assert _sif_params_str(_canonical_sif_params(None)) == ""
 
 
+def test_sif_params_string_is_parsed():
+    assert _canonical_sif_params("N=10,M=20") == (("M", 20), ("N", 10))
+    assert _canonical_sif_params("ZETA=20.0") == (("ZETA", 20.0),)
+    assert _canonical_sif_params("") == ()
+    params = _canonical_sif_params({"N": 10, "ZETA": 20.0})
+    assert _canonical_sif_params(_sif_params_str(params)) == params
+
+
+def test_malformed_sif_params_string_is_refused():
+    with pytest.raises(ValueError, match="NAME=VALUE"):
+        _canonical_sif_params("N10")
+
+
+def _sampled(sampler, tmp_path):
+    data = ExperimentData(domain=Domain(), project_dir=tmp_path)
+    out = sampler.call(data=data)
+    return [dict(sample.input_data) for _, sample in out]
+
+
+def test_sampler_lists_valued_rows_of_a_given_table(tmp_path):
+    path = _write_table(
+        tmp_path / "provisional.csv",
+        [
+            ("EXTROSNB", "N=10", 10, "sha", 0.0, "soltn", ""),
+            ("JIMACK", "M=2,N=2", "", "sha", "", "", "fails to build: x"),
+            ("ROSENBR", "", 2, "sha", 0.0, "estimate", ""),
+        ],
+    )
+    rows = _sampled(CutestTableSampler(table=path), tmp_path)
+    assert rows == [
+        {"problem": "EXTROSNB", "sif_params": "N=10"},
+        {"problem": "ROSENBR", "sif_params": ""},
+    ]
+
+
+def test_sampler_refuses_a_table_without_values(tmp_path):
+    path = _write_table(
+        tmp_path / "empty.csv",
+        [("JIMACK", "M=2,N=2", "", "sha", "", "", "fails to build: x")],
+    )
+    with pytest.raises(ValueError, match="no row with a value"):
+        _sampled(CutestTableSampler(table=path), tmp_path)
+
+
 def test_shipped_table_parses():
     rows = _read_table(_TABLE_PATH)
     for (problem, _), row in rows.items():
@@ -101,7 +147,7 @@ def test_table_listing_a_size_twice_is_refused(tmp_path):
 def test_size_that_never_built_may_have_no_n(table):
     table([("JIMACK", "M=2,N=2", "", "sha", "", "", "fails to build: x")])
     with pytest.raises(ValueError, match="fails to build"):
-        _table_global_min("JIMACK", "M=2,N=2", "sha")
+        _table_global_min("JIMACK", "M=2,N=2", "sha", cutest_task._TABLE_PATH)
 
 
 def test_valued_row_without_n_is_refused(tmp_path):
@@ -118,25 +164,28 @@ def test_table_row_is_looked_up_by_problem_and_size(table):
             ("EXTROSNB", "N=10", 10, "sha10", 1.5, "estimate", ""),
         ]
     )
-    assert _table_global_min("EXTROSNB", "N=10", "sha10") == 1.5
+    assert (
+        _table_global_min("EXTROSNB", "N=10", "sha10", cutest_task._TABLE_PATH)
+        == 1.5
+    )
 
 
 def test_problem_missing_from_table_is_refused(table):
     table([])
     with pytest.raises(ValueError, match="not in the global_min table"):
-        _table_global_min("ROSENBR", "", "sha")
+        _table_global_min("ROSENBR", "", "sha", cutest_task._TABLE_PATH)
 
 
 def test_excluded_problem_is_refused_with_its_reason(table):
     table([("INDEF", "N=10", 10, "sha", "", "", "unbounded below")])
     with pytest.raises(ValueError, match="unbounded below"):
-        _table_global_min("INDEF", "N=10", "sha")
+        _table_global_min("INDEF", "N=10", "sha", cutest_task._TABLE_PATH)
 
 
 def test_changed_sif_file_is_refused(table):
     table([("ROSENBR", "", 2, "old-sha", 0.0, "soltn", "")])
     with pytest.raises(ValueError, match="has changed"):
-        _table_global_min("ROSENBR", "", "new-sha")
+        _table_global_min("ROSENBR", "", "new-sha", cutest_task._TABLE_PATH)
 
 
 def test_opener_is_hashable_and_pickles():
@@ -256,3 +305,58 @@ def test_vmapped_loss_matches_a_loop(x64):
     batched = jax.jit(jax.vmap(task.loss_fn))(xs)
     looped = jnp.stack([task.loss_fn(x) for x in xs])
     np.testing.assert_array_equal(batched, looped)
+
+
+@needs_cutest
+def test_global_min_from_a_given_table(tmp_path):
+    sha = cutest_task._sif_sha256("ROSENBR")
+    path = _write_table(
+        tmp_path / "provisional.csv",
+        [("ROSENBR", "", 2, sha, 0.125, "estimate", "")],
+    )
+    task = create_cutest_task("ROSENBR", "", table=path)
+    assert task.global_min == 0.125
+
+
+@needs_cutest
+def test_task_set_config_builds_every_listed_row(tmp_path):
+    """conf/tasks/cutest.yaml, pointed at a provisional table."""
+    from importlib import resources
+
+    from omegaconf import OmegaConf
+
+    from l2co_tasks import create_tasks_experimentdata
+
+    path = _write_table(
+        tmp_path / "provisional.csv",
+        [
+            (
+                problem,
+                params,
+                n,
+                cutest_task._sif_sha256(problem),
+                0.0,
+                "soltn",
+                "",
+            )
+            for problem, params, n in [
+                ("ROSENBR", "", 2),
+                ("EXTROSNB", "N=5", 5),
+            ]
+        ],
+    )
+    raw = OmegaConf.create(
+        resources.files("l2co_tasks.conf.tasks")
+        .joinpath("cutest.yaml")
+        .read_text()
+    )
+    cfg = OmegaConf.create({"seed": 0, "tasks": raw})
+    cfg.tasks.sampler.table = str(path)
+    ed = create_tasks_experimentdata(cfg.tasks, project_dir=tmp_path / "ed")
+    tasks = {
+        sample.output_data["task"].tag["fn_name"]: sample.output_data["task"]
+        for _, sample in ed
+    }
+    assert sorted(tasks) == ["EXTROSNB", "ROSENBR"]
+    assert tasks["EXTROSNB"].dimensionality == 5
+    assert tasks["EXTROSNB"].tag["sif_params"] == "N=5"

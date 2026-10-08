@@ -315,6 +315,24 @@ _SLOW = {
 }
 
 
+def _cutest_ready() -> str | None:
+    """Why the ``cutest`` task set can't be built here, or ``None``.
+
+    It needs pycutest with a CUTEst installation, and a committed
+    ``global_min`` table with at least one valued row (ADR 0004); the table
+    stays empty until the cutest_global_min_table experiment fills it.
+    """
+    try:
+        import pycutest  # noqa: F401
+    except (ImportError, RuntimeError):
+        return "needs pycutest and a CUTEst installation"
+    from l2co_tasks._src.cutest_task import _TABLE_PATH, _read_table
+
+    if not any(not row.excluded for row in _read_table(_TABLE_PATH).values()):
+        return "the committed CUTEst global_min table has no valued rows yet"
+    return None
+
+
 def _shipped_yaml_names() -> list[str]:
     """Sorted stems of every YAML under ``l2co_tasks.conf.tasks/``."""
     return sorted(
@@ -374,6 +392,8 @@ def test_sample_task_distribution(
         pytest.skip("installed bbob-jax predates the BBOB-noisy suite")
     if config_name in _NEEDS_LSGO and not _HAS_LSGO:
         pytest.skip("installed bbob-jax predates the CEC 2013 LSGO suite")
+    if config_name == "cutest" and (reason := _cutest_ready()) is not None:
+        pytest.skip(reason)
 
     # mnist1d, spirals, gaussian_classification ship relative
     # ``task_kwargs.dataset_path`` strings; PDETaskSampler likewise
