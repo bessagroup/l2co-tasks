@@ -62,9 +62,31 @@ rest of this ADR fixes which problems go in and how each becomes a
   (DIXMAANA1 sets `M`, and n = 3M). Unlisted values are never used:
   SIFDecode often accepts them, but CUTEst never validated those
   instances.
+- **Which parameters are sizes** (`cutest_sizes`). A size parameter is an
+  integer parameter that lists more than one value. Real parameters
+  (GENHUMPS's `ZETA`) and integer parameters listed once (BRYBND's `LB`)
+  stay at the problem's default. Listed values keep their file order,
+  without repeats.
+- **Several size parameters.** Lists of equal length are paired by
+  position: ARGLINA, ARGLINB and ARGLINC list `N` and `M` as pairs
+  (10/20, 50/100, ...), and JIMACK lists two pairs. Otherwise the
+  parameter with the most values varies and the others stay at their
+  defaults: VAREIGVL varies `N` and keeps `M = 6`. Every combination was
+  rejected, since most combinations are instances CUTEst doesn't define
+  (ARGLIN needs `M ≥ N`). So was the default pairing alone, since the
+  defaults exceed the size cap for 4 of these 5 problems (ARGLIN's
+  `N = 200`, VAREIGVL's `N = 4999`).
+- **A listed size can still fail to build.** SIFDecode rejects JIMACK at
+  its listed `M = 2, N = 2` ("Decoding failure, status = 3"; pycutest
+  raises `RuntimeError`), and its default size has n = 3549. The
+  experiment that builds the table records a size that fails to build as
+  an excluded row, with the reason, so JIMACK contributes nothing.
 
 Census of MASTSIF at `29adac9` (2026-06-01): 293 unconstrained problems.
-133 have a variable size, and 147 have a fixed size with n ≤ 100.
+170 have a fixed size and 115 one size parameter. 8 list several integer
+parameters; 3 of those (BRYBND, BROYDNBDLS, MANCINO) list only one
+value for all but `N`, which leaves the 5 above. 147 of the fixed-size
+problems have n ≤ 100.
 
 ## Where a run starts
 
@@ -80,8 +102,29 @@ task's identity. pycutest exposes no optimal values. Many SIF files
 record one in a comment, as `*LO SOLTN 1.2701`, `*LO SOLTN(10)
 7.08765D-5` (per size, with a Fortran exponent) or `*LO SOLTN(50) ???`
 (unknown). These values are often rounded, and some are local optima.
-Of the 293 problems, 222 have a numeric value, 6 have only `???`, and 65
-have none.
+Of the 293 problems, 158 have a numeric value: 79 fixed-size, 13
+variable-size with a value per size, and 66 variable-size with one value
+for every size. 71 have only `???` or a blank, and 64 have no `SOLTN` line.
+(An earlier draft counted 222, from a pattern that let an empty
+`*LO SOLTN` line borrow the next line's first word as its value.)
+
+How a value is read for one size (`cutest_soltn`):
+
+- **A per-size key is the value of a size parameter**, not `n`.
+  CLPLATEB lists `SOLTN(4)` for `P = 4`, where n = 16. The keys belong to
+  the size parameter whose listed values contain most of them (ARGLIN's
+  keys are `N`'s, not `M`'s). A key that isn't one of its listed values
+  is ignored. CRAGGLVY lists `M` as 1, 4, 24, 49, ... but keys its
+  values 2, 4, 24, 29, ...: 2 and 29 look like typos for 1 and 49, so
+  those two sizes get no recorded value.
+- **A per-size value for the requested size wins.** Otherwise a value
+  written without a size counts **for every size**. Most of those are
+  0.0 (sums of squares) or DIXMAAN's 1.0, true at every size. Where one
+  isn't, it can only lower `global_min`, and the table-regeneration
+  report flags rows where `SOLTN` undercuts the estimate by more than a
+  tolerance.
+- **Several values for one size give the lowest.** `???`, a blank or
+  anything that isn't a number counts as no value.
 
 - **Where a numeric value exists for that size,** `global_min` is the
   lower of the estimate and `SOLTN`. A value rounded up would break the

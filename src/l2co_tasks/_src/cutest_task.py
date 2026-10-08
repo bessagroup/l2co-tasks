@@ -41,7 +41,6 @@ import csv
 import functools
 import hashlib
 import math
-import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -52,6 +51,7 @@ import jax.numpy as jnp
 import numpy as np
 
 # Local
+from .cutest_sif import INSTALL_HINT, sif_path
 from .host_objective import host_loss
 from .task import Task
 
@@ -86,12 +86,6 @@ _TABLE_COLUMNS = (
 #: pycutest's value for "no bound".
 _NO_BOUND = 1e20
 
-_INSTALL_HINT = (
-    "install the extra (`pip install 'l2co-tasks[cutest]'`) and a CUTEst "
-    "build (SIFDecode, CUTEst and the MASTSIF problem files), and set "
-    "CUTEST, SIFDECODE and MASTSIF; see ADR 0004"
-)
-
 SifParams = tuple[tuple[str, int | float], ...]
 
 
@@ -102,7 +96,7 @@ def _pycutest() -> Any:
     except (ImportError, RuntimeError) as error:
         raise ImportError(
             "CUTEst tasks need pycutest and a CUTEst installation: "
-            + _INSTALL_HINT
+            + INSTALL_HINT
         ) from error
     return pycutest
 
@@ -121,13 +115,7 @@ def _sif_params_str(sif_params: SifParams) -> str:
 
 def _sif_sha256(problem: str) -> str:
     """sha256 of the problem's SIF file in ``$MASTSIF``."""
-    mastsif = os.environ.get("MASTSIF")
-    if not mastsif:
-        raise ImportError(f"MASTSIF is not set: {_INSTALL_HINT}")
-    path = Path(mastsif) / f"{problem}.SIF"
-    if not path.is_file():
-        raise ValueError(f"no SIF file for CUTEst problem {problem!r}: {path}")
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    return hashlib.sha256(sif_path(problem).read_bytes()).hexdigest()
 
 
 @dataclass(frozen=True)
