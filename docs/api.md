@@ -65,7 +65,7 @@ The experiment that builds the `global_min` table uses them.
 
 ## Estimating the global minimum
 
-Benchmark a task's best achievable loss with a short, seeded, multi-restart Adam search. This is how the supervised-learning and meta factories set their *empirical* `global_min`; it is also a standalone helper for custom tasks. A task with a `Box` is searched inside it.
+Benchmark a task's best achievable loss with a short, seeded, multi-restart Adam search. This is how the supervised-learning and meta factories set their *empirical* `global_min`; it is also a standalone helper for custom tasks. A task with a `Box` is searched inside it. A `restart_sampler`, with the signature of the `l2co.sampling` samplers, sets where the restarts start; the CUTEst table uses it to restart around each problem's prescribed start.
 
 ::: l2co_tasks.estimate_global_min
 

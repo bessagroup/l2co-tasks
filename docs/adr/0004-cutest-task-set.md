@@ -131,9 +131,14 @@ How a value is read for one size (`cutest_soltn`):
   floor; one rounded down would silently cap the target precision. The
   estimate, at full float64 precision, covers both. **Otherwise**,
   `global_min` is the estimate.
-- **The estimate always runs in x64,** whatever the process setting.
-  bbob's and cec2005's ids already differ between processes with and
-  without x64. The new set shouldn't inherit that.
+- **The estimate runs in x64 because the table experiment requires it,**
+  not because the estimator forces it. The first draft forced x64 inside
+  the estimator, so that a task built in a process without x64 would
+  still get the same id. The committed table (below) removed that reason:
+  a task's `global_min` is read from the table, not estimated where the
+  task is built, so its id no longer depends on the process. The only
+  process that estimates is the table experiment. It refuses to start
+  without x64, and a host loss traced in float32 warns anyway.
 - **Restarts start where the optimizers start:** one from `x0` and the
   rest from the relative sampler. `estimate_global_min` gains a
   generic `restart_sampler` parameter, passed in by the caller. Existing
