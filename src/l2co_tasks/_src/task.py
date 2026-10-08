@@ -9,8 +9,10 @@ Module for the task abstraction.
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
+import pickle
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, TypedDict
@@ -18,6 +20,7 @@ from typing import Any, TypedDict
 # Third-party
 import cloudpickle
 import equinox as eqx
+import jax
 import jax.tree_util as jtu
 from jaxtyping import PyTree
 
@@ -59,6 +62,38 @@ def count_parameters(model: PyTree) -> int:
         p.size
         for p in jtu.tree_leaves(eqx.filter(model, eqx.is_inexact_array))
     )
+
+
+class _PickledShapeDtypeStruct:
+    """What a pickled ``jax.ShapeDtypeStruct`` loads as, before it is rebuilt.
+
+    JAX changes which fields a ``ShapeDtypeStruct`` pickles between
+    releases -- a skeleton written under JAX 0.9 sets ``vma``, which JAX
+    0.11 no longer has -- so unpickling one straight into the running
+    JAX's class can fail. This keeps only the shape and dtype, the two
+    fields every release has and all ``eqx.tree_deserialise_leaves``
+    reads, ignoring the rest.
+    """
+
+    def __setstate__(self, state):
+        # A slotted class pickles its state as ``(instance dict, slots)``.
+        if isinstance(state, tuple):
+            merged = {}
+            for part in state:
+                merged.update(part or {})
+            state = merged
+        self.shape = tuple(state["shape"])
+        self.dtype = state["dtype"]
+
+
+class _SkeletonUnpickler(pickle.Unpickler):
+    """Unpickles a model skeleton, loading every JAX ``ShapeDtypeStruct`` as
+    a :class:`_PickledShapeDtypeStruct`."""
+
+    def find_class(self, module, name):
+        if name == "ShapeDtypeStruct" and module.split(".")[0] == "jax":
+            return _PickledShapeDtypeStruct
+        return super().find_class(module, name)
 
 
 class DatasetDict(TypedDict):
@@ -287,8 +322,23 @@ class Task(eqx.Module):
         -------
         PyTree
             Skeleton with the same structure as the original model.
+
+        Notes
+        -----
+        The skeleton's ``ShapeDtypeStruct`` leaves are rebuilt from their
+        shape and dtype rather than unpickled into the running JAX's
+        class, so a file written under one JAX loads under another.
         """
-        return cloudpickle.loads(bytes.fromhex(hyperparams["model_shape_hex"]))
+        raw = bytes.fromhex(hyperparams["model_shape_hex"])
+        skeleton = _SkeletonUnpickler(io.BytesIO(raw)).load()
+        return jtu.tree_map(
+            lambda leaf: (
+                jax.ShapeDtypeStruct(leaf.shape, leaf.dtype)
+                if isinstance(leaf, _PickledShapeDtypeStruct)
+                else leaf
+            ),
+            skeleton,
+        )
 
     @classmethod
     def _from_header(cls, hyperparams: dict, model) -> Task:
