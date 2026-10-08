@@ -17,7 +17,7 @@ from ._src.benchmark_task import (
 from ._src.constraints import Box, Constraint, Equality, Inequality
 from ._src.continue_from_path import retrieve_tasks
 from ._src.cutest_sif import cutest_sizes, cutest_soltn
-from ._src.cutest_task import create_cutest_task
+from ._src.cutest_task import CutestTableSampler, create_cutest_task
 from ._src.embedded_task import create_embedded_bbob_task
 from ._src.euler import EulerTaskSampler, create_euler_task
 from ._src.experimentdata import create_tasks_experimentdata
@@ -54,6 +54,7 @@ __all__ = [
     "Box",
     "CEC2019Sampler",
     "Constraint",
+    "CutestTableSampler",
     "DatasetDict",
     "Equality",
     "EulerTaskSampler",

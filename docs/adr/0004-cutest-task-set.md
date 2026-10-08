@@ -159,15 +159,32 @@ How a value is read for one size (`cutest_soltn`):
   - The cost is at least twice one estimate per row; CUTEst evaluations
     are microseconds, so this is seconds per row.
 - **Floor-test-guided estimation (ADR 0001) runs before the first
-  databank run,** as its own run on a scratch store: the whole `all`
-  suite on the provisional table, then a check of each task's lowest loss
-  against its `global_min`. Breached rows are re-estimated at a higher
-  level, and the real databank run happens once the table is final. Using
-  the real run as the floor test was rejected: its breached rows would
-  need their stored cells deleted. Checking against a strong subset was
-  rejected too: ADR 0001 asks for the whole suite. A problem the floor
-  test still breaches at the estimator's maximum strength is excluded,
-  with the reason recorded.
+  databank run, as its own run** (l2co_experiments' `cutest_floor_test`):
+  - It runs **the suite the CUTEst databank will run** on the
+    provisional table: `cutest_databank`, 72 optimizers. That is the
+    bbob databank's 60 plus the optimistix minimisers, the scipy
+    methods, IPOPT and SHADE, with random search added structurally.
+    ADR 0001's `all` (58) would leave out the quasi-Newton and NLP
+    solvers, which are the likeliest to go below an estimate.
+  - It reads each task's lowest loss from **the run's own per-cell
+    histories** (float64, every iteration), not from a dumped store.
+    The store is float32 on disk and interpolated onto a fixed grid, so
+    it can hide a breach, and the run leaves no store behind to clean
+    up.
+  - A **breach** is a loss below `global_min − 1e-6 · max(1,
+    |global_min|)`. ADR 0001's empirical tolerance (`1e-3 · |global_min| +
+    1e-6`) was rejected: it would let breaches of up to 0.1% through,
+    and they would surface downstream as negative quality values.
+  - The run points at the provisional table by path (`create_cutest_task`'s
+    `table`, `CutestTableSampler`'s `table`), so nothing provisional is
+    committed. Only the final table reaches l2co-tasks, in a PR.
+
+  Breached rows are re-estimated one level above the level their estimate
+  settled at, and the real databank run happens once the table is final. Using the real run as the floor
+  test was rejected: its breached rows would need their stored cells
+  deleted. Checking against a strong subset was rejected too. A problem
+  the floor test still breaches at the estimator's maximum strength is
+  excluded, with the reason recorded.
   The estimator stays standalone (optax only, ADR 0001). If the
   exclusion list turns out long, adding a derivative-free arm becomes a
   separate decision.

@@ -49,6 +49,8 @@ from typing import Any
 # Third-party
 import jax.numpy as jnp
 import numpy as np
+import pandas as pd
+from f3dasm import Block, ExperimentData
 
 # Local
 from .cutest_sif import INSTALL_HINT, sif_path
@@ -63,6 +65,7 @@ __status__ = "Stable"
 # =============================================================================
 
 __all__ = [
+    "CutestTableSampler",
     "create_cutest_task",
 ]
 
@@ -102,10 +105,33 @@ def _pycutest() -> Any:
     return pycutest
 
 
+def _parse_sif_value(text: str) -> int | float:
+    """A SIF-parameter value from its canonical string: int if it is one."""
+    try:
+        return int(text)
+    except ValueError:
+        return float(text)
+
+
 def _canonical_sif_params(
-    sif_params: Mapping[str, int | float] | None,
+    sif_params: Mapping[str, int | float] | str | None,
 ) -> SifParams:
-    """``sif_params`` as a sorted, hashable tuple of pairs."""
+    """``sif_params`` as a sorted, hashable tuple of pairs.
+
+    Accepts a mapping, or the canonical string a table row and a task tag
+    hold (``"M=20,N=10"``), so a task-set row can carry it as one column.
+    """
+    if isinstance(sif_params, str):
+        pairs = {}
+        for item in filter(None, sif_params.split(",")):
+            name, sep, value = item.partition("=")
+            if not sep or not name:
+                raise ValueError(
+                    f"SIF parameters as a string are 'NAME=VALUE,...'; "
+                    f"got {sif_params!r}"
+                )
+            pairs[name] = _parse_sif_value(value)
+        sif_params = pairs
     return tuple(sorted((sif_params or {}).items()))
 
 
@@ -164,8 +190,10 @@ def _read_table(path: Path) -> dict[tuple[str, str], _TableRow]:
     return rows
 
 
-def _table_global_min(problem: str, params_str: str, sif_sha256: str) -> float:
-    """``global_min`` for one (problem, size) from the committed table.
+def _table_global_min(
+    problem: str, params_str: str, sif_sha256: str, table: Path
+) -> float:
+    """``global_min`` for one (problem, size) from the table at ``table``.
 
     Raises
     ------
@@ -174,11 +202,11 @@ def _table_global_min(problem: str, params_str: str, sif_sha256: str) -> float:
         the problem's SIF file no longer matches the row.
     """
     label = f"{problem}({params_str})" if params_str else problem
-    row = _read_table(_TABLE_PATH).get((problem, params_str))
+    row = _read_table(table).get((problem, params_str))
     if row is None:
         raise ValueError(
             f"CUTEst problem {label} is not in the global_min table "
-            f"({_TABLE_PATH.name}). The table is built by the "
+            f"({table}). The table is built by the "
             "cutest_global_min_table experiment in l2co_experiments; to "
             "build a task outside it, pass global_min explicitly (ADR 0004)."
         )
@@ -236,9 +264,10 @@ class _CutestOpener:
 
 def create_cutest_task(
     problem: str,
-    sif_params: Mapping[str, int | float] | None = None,
+    sif_params: Mapping[str, int | float] | str | None = None,
     *,
     global_min: float | None = None,
+    table: str | Path | None = None,
 ) -> Task:
     """Create a task from an unconstrained CUTEst problem (ADR 0004).
 
@@ -250,16 +279,21 @@ def create_cutest_task(
     ----------
     problem : str
         CUTEst problem name, e.g. ``"ROSENBR"``.
-    sif_params : Mapping[str, int | float] or None, optional
-        SIF parameters selecting the size, e.g. ``{"N": 10}``; ``None``
+    sif_params : Mapping[str, int | float] or str or None, optional
+        SIF parameters selecting the size, e.g. ``{"N": 10}``, or their
+        canonical string, ``"N=10"``, as a table row holds it; ``None``
         (the default) uses the problem's default. Use the values the SIF
         file lists, with integers for integer parameters: the table is
         keyed by the canonical string, so ``{"N": 10.0}`` is not
         ``{"N": 10}``.
     global_min : float or None, optional
         The task's ``global_min``. ``None`` (the default) reads it from the
-        committed table; pass a value to build a task outside the table,
-        as the experiment that builds the table does.
+        table; pass a value to build a task outside any table, as the
+        experiment that builds the table does.
+    table : str or Path or None, optional
+        The table to read ``global_min`` from. ``None`` (the default) is
+        the committed one; a path points at a provisional table, as the
+        floor-test run does with the table experiment's output.
 
     Returns
     -------
@@ -296,7 +330,12 @@ def create_cutest_task(
     params_str = _sif_params_str(params)
     sif_sha256 = _sif_sha256(problem)
     if global_min is None:
-        global_min = _table_global_min(problem, params_str, sif_sha256)
+        global_min = _table_global_min(
+            problem,
+            params_str,
+            sif_sha256,
+            _TABLE_PATH if table is None else Path(table),
+        )
     elif not math.isfinite(global_min):
         raise ValueError(f"global_min must be finite, got {global_min}")
 
@@ -331,3 +370,54 @@ def create_cutest_task(
         global_min=float(global_min),
         tag=tag,
     )
+
+
+class CutestTableSampler(Block):
+    """The CUTEst task set: one row per valued row of a ``global_min`` table.
+
+    The sampler behind ``conf/tasks/cutest.yaml``. It reads the committed
+    table, or the one at ``table``, and emits a ``problem`` and a
+    ``sif_params`` (canonical string) column for every row that has a
+    value. Excluded rows are left out, since they can't be built. Pass the
+    same ``table`` to :func:`create_cutest_task` through ``task_kwargs``,
+    so the tasks read their ``global_min`` from the table that listed
+    them.
+
+    Parameters
+    ----------
+    table : str or Path or None, optional
+        The table to list; ``None`` (the default) is the committed one.
+    """
+
+    def __init__(self, table: str | Path | None = None):
+        self.table = None if table is None else Path(table)
+
+    def call(self, data: ExperimentData, **kwargs: Any) -> ExperimentData:
+        """The task-set rows, on ``data``'s domain.
+
+        Raises
+        ------
+        ValueError
+            If the table has no row with a value: a CUTEst task set with
+            no tasks is a misconfiguration, not an empty result.
+        """
+        path = _TABLE_PATH if self.table is None else self.table
+        rows = [
+            {"problem": problem, "sif_params": params}
+            for (problem, params), row in sorted(_read_table(path).items())
+            if not row.excluded
+        ]
+        if not rows:
+            raise ValueError(
+                f"the CUTEst table {path} has no row with a value; build it "
+                "with l2co_experiments' cutest_global_min_table (ADR 0004)"
+            )
+        domain = data.domain
+        for name in ("problem", "sif_params"):
+            if name not in domain.input_names:
+                domain.add_parameter(name)
+        return ExperimentData(
+            domain=domain,
+            input_data=pd.DataFrame(rows),
+            project_dir=data.project_dir,
+        )

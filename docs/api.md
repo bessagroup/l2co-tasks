@@ -55,6 +55,13 @@ coordinates. `global_min` comes from a committed table; until a
 
 ::: l2co_tasks.create_cutest_task
 
+The task set itself is `conf/tasks/cutest.yaml` (`tasks=cutest`): one task
+per valued row of the table, listed by `CutestTableSampler`. Point its
+`sampler.table` at a provisional table to build the set from that instead;
+the tasks then read their `global_min` from the same file.
+
+::: l2co_tasks.CutestTableSampler
+
 The sizes a problem lists, and the optimum its SIF file records for
 each, are read straight from the SIF file in `MASTSIF`, without pycutest.
 The experiment that builds the `global_min` table uses them.

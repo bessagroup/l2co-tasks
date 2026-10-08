@@ -1,0 +1,39 @@
+# Unconstrained CUTEst problems (ADR 0004): one task per valued row of the
+# global_min table, at the sizes the table lists (at most 100 variables).
+# Needs the [cutest] extra and a CUTEst installation (CUTEST, SIFDECODE,
+# MASTSIF set). A task's model is the problem's prescribed start x0, in the
+# problem's own coordinates, so pair this set with the relative_normal
+# sampler, which starts every run there.
+sampler:
+  _target_: l2co_tasks.CutestTableSampler
+  # null: the committed table. A path lists a provisional table instead,
+  # as l2co_experiments' cutest_floor_test does with the table
+  # experiment's output; task_kwargs.table follows it.
+  table: null
+sampler_kwargs:
+
+experimentdata:
+  domain:
+    input: {}       # CutestTableSampler adds `problem` and `sif_params`
+
+task_kwargs:
+  # Read every task's global_min from the table that listed it.
+  table: ${..sampler.table}
+
+data_generator:
+  # Factory function that creates a Task object from each ExperimentData row
+  _target_: l2co_tasks.create_cutest_task
+  _partial_: True
+
+schema:
+  # Feature schema used by FeatureProcessor to encode task metadata for the model
+  dimensionality: continuous
+  cutest_objective:
+    - sum of squares
+    - quadratic
+    - other
+  cutest_origin:
+    - academic
+    - modelling
+    - real-world
+  cutest_internal: boolean
