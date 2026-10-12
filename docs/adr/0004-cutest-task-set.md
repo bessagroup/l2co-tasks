@@ -196,9 +196,10 @@ How a value is read for one size (`cutest_soltn`):
 - **Floor-test-guided estimation (ADR 0001) runs before the first
   databank run, as its own run** (l2co_experiments' `cutest_floor_test`):
   - It runs **the suite the CUTEst databank will run** on the
-    provisional table: `cutest_databank`, 72 optimizers. That is the
+    provisional table: `cutest_databank`, 73 optimizers. That is the
     bbob databank's 60 plus the optimistix minimisers, the scipy
-    methods, IPOPT and SHADE, with random search added structurally.
+    methods (L-BFGS-B, `lbfgsb`, since l2co-optimizers ADR 0006), IPOPT
+    and SHADE, with random search added structurally.
     ADR 0001's `all` (58) would leave out the quasi-Newton and NLP
     solvers, which are the likeliest to go below an estimate.
   - It reads each task's lowest loss from **the run's own per-cell
