@@ -50,7 +50,25 @@ rest of this ADR fixes which problems go in and how each becomes a
   often finite on only some variables. Building a task for a
   bound-constrained problem raises an error that cites l2co ADR 0020.
 - **Excluded:** problems with integer or boolean variables, and problems
-  unbounded below.
+  unbounded below. Four rows of the 2026-10-12 table are unbounded:
+  - **INDEF** (n = 10, 50, 100): the objective is `sum(x)` plus bounded
+    cosines, so along `x = -t * ones` it is `-n t + const`.
+  - **STRATEC**, as coded: its likelihood caps sums of exponentials at
+    `1e308`, so for large coefficients the objective falls without limit.
+    The negative log-likelihood itself is non-negative, and the fit from
+    `x0` is 2212.2623, but optimizers see the coded function, and points
+    within 3 of the fit already exploit the cap.
+  - **BRKMCC**: a `1/g` term, `g = 1 - x1^2/4 - x2^2`, has a pole on that
+    ellipse, and the objective falls without limit approaching it from
+    outside. `x0 = (2, 2)` and the recorded optimum, 0.16904267919645 at
+    (1.795, 1.378), both lie outside the ellipse, and the ellipse never
+    reaches `x2 > 1`. With the box `[1.05, 6]` on both variables the
+    barrier term is at least -0.39, and the minimum is 0.16904267919645:
+    400 local searches and 4000 random points on the box found nothing
+    lower. `create_cutest_task("BRKMCC", box=(1.05, 6.0),
+    global_min=0.16904267919645)` builds that task. It has a `Box`, so it
+    belongs to a bound-constrained task set, not to this one, and its row
+    in the unconstrained table stays excluded.
 - **Both smoothness classes are included** (regular `R` and irregular
   `I`). Today this changes nothing: pycutest classifies all 293
   unconstrained problems in MASTSIF as regular. It will matter once
@@ -81,6 +99,19 @@ rest of this ADR fixes which problems go in and how each becomes a
   raises `RuntimeError`), and its default size has n = 3549. The
   experiment that builds the table records a size that fails to build as
   an excluded row, with the reason, so JIMACK contributes nothing.
+  - JIMACK's failure is a SIFDecode quirk: given as `N=2,M=2` the same
+    values decode (n = 81). That build is still not the problem, though.
+    The file's Fortran element code fixes the grid a second time
+    (`PARAMETER ( M = 6, N = 12 )`), and its header says to edit that by
+    hand for another size. A parameter override pairs a 2 × 2 grid with
+    element code for 6 × 12.
+  - **A listed size the file does not define is left out** by
+    `cutest_sizes`, so it never becomes a row: JIMACK's `M = 2, N = 2`
+    (above), and SCURLY20's and SCURLY30's `N = 10`, below their window
+    width `K` (20, 30), where the loop `DO I N-K+1 N` reaches `X(-9)`.
+    CURLY20 and CURLY30, which they scale, list only `N ≥ 100`. The list
+    is `_UNDEFINED_SIZES` in `cutest_sif.py`. JIMACK's remaining size has
+    n = 3549, over the cap, so JIMACK contributes nothing.
 
 Census of MASTSIF at `29adac9` (2026-06-01): 293 unconstrained problems.
 170 have a fixed size and 115 one size parameter. 8 list several integer
@@ -150,8 +181,12 @@ How a value is read for one size (`cutest_soltn`):
   a time (each level doubles restarts and steps) up to a maximum level.
   - A row that never settles is excluded. That is what catches a problem
     unbounded below: no SIF file says so, and its estimate need not cross
-    any fixed threshold at a practical budget. FLETCBV3 at n = 100 fell
-    from −178,589 to −178,675 over four levels in a smoke run.
+    any fixed threshold at a practical budget. It also excludes slow
+    convergence. FLETCBV3 at n = 100 fell from −178,589 to −178,675 over
+    four levels in a smoke run, yet it is bounded: a positive-definite
+    quadratic, a linear term and a cosine term worth at most ±0.0102 put
+    its minimum at −178,689.2343 to within 2e-6. Unboundedness is
+    settled from the formula, not from a row that never settles.
   - The exception is a row whose estimates stay at or above a recorded
     `SOLTN`. It is converging towards that optimum rather than diverging,
     so it takes `SOLTN`, and the report lists it. EXTROSNB at n = 100
@@ -161,9 +196,10 @@ How a value is read for one size (`cutest_soltn`):
 - **Floor-test-guided estimation (ADR 0001) runs before the first
   databank run, as its own run** (l2co_experiments' `cutest_floor_test`):
   - It runs **the suite the CUTEst databank will run** on the
-    provisional table: `cutest_databank`, 72 optimizers. That is the
+    provisional table: `cutest_databank`, 73 optimizers. That is the
     bbob databank's 60 plus the optimistix minimisers, the scipy
-    methods, IPOPT and SHADE, with random search added structurally.
+    methods (L-BFGS-B, `lbfgsb`, since l2co-optimizers ADR 0006), IPOPT
+    and SHADE, with random search added structurally.
     ADR 0001's `all` (58) would leave out the quasi-Newton and NLP
     solvers, which are the likeliest to go below an estimate.
   - It reads each task's lowest loss from **the run's own per-cell
@@ -216,6 +252,40 @@ and committed.
   table reaches l2co-tasks in a PR. It lives in l2co_experiments because it needs l2co,
   for the suite, and l2co-optimizers, for the sampler, and l2co-tasks may
   import neither.
+- **The first committed table (2026-10-12) is that experiment's output
+  with 96 rows corrected.** Run `1791474722` (MASTSIF `29adac9`) gave 478
+  rows. Its rule, the lower of the estimate and `SOLTN`, let wrong
+  `SOLTN` comments in: values copied from another problem or size,
+  rounded down, or a trivial bound such as 0 for a sum of squares. Each
+  row now rests on the strongest evidence found, in this order:
+  - **the formula**: an exact solve (linear least squares), a closed
+    form (ARGLINB, ARGLINC), a bound that is reached (CHAINWOO is 1 plus
+    squares, SINQUAD2 and SPINLS are sums of even powers, SCOSINE is a
+    sum of cosines), or a derivation (MEXHAT, SCURLY, FLETCBV3, INDEFM);
+  - **the lowest value reached** by the estimate or by IPOPT and
+    trust-constr with exact Hessians (l2co-optimizers ADR 0007), one run
+    each from `x0`;
+  - never `SOLTN` alone where a reached value or the formula contradicts
+    it.
+
+  The stored value is the lower of the formula's value and the lowest
+  value reached, so float evaluation noise cannot breach the floor.
+  Three listed sizes are dropped (see `_UNDEFINED_SIZES` above). Five rows
+  stay excluded, unbounded below: BRKMCC, INDEF (n = 10, 50, 100) and
+  STRATEC. That leaves 470 tasks. Every correction, with the value the
+  run gave and its basis, is in `0004-cutest-global-min-corrections.csv`
+  next to this ADR.
+  - **12 values are the best found, not established**: the DIAMON and
+    DMN crystallography fits (DIAMON2DLS and DMN15102LS are one problem,
+    as are DIAMON3DLS and DMN15103LS, and share a value), FBRAIN3LS,
+    FREUROTH (n = 50) and NONMSQRT (P = 7, 10). These are the likeliest
+    floor-test breaches.
+  - **The floor test with the full suite has not yet run on this
+    table.**
+  - **Rerunning the experiment does not reproduce the corrections**: its
+    rule still prefers `SOLTN`. Regenerating the table needs the
+    corrections as overrides, or a rule that puts the formula and
+    reached values first.
 
 ## Identity
 

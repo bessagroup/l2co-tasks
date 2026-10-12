@@ -20,7 +20,7 @@ import pytest
 from f3dasm import ExperimentData
 from f3dasm.design import Domain
 
-from l2co_tasks import CutestTableSampler, Task, create_cutest_task
+from l2co_tasks import Box, CutestTableSampler, Task, create_cutest_task
 from l2co_tasks._src import cutest_task
 from l2co_tasks._src.cutest_task import (
     _TABLE_COLUMNS,
@@ -196,6 +196,12 @@ def test_opener_is_hashable_and_pickles():
     assert cloudpickle.loads(cloudpickle.dumps(opener)) == opener
 
 
+def test_box_needs_its_own_global_min():
+    # A boxed task is not the unconstrained problem the table describes.
+    with pytest.raises(ValueError, match="global_min"):
+        create_cutest_task("BRKMCC", box=(1.05, 6.0))
+
+
 def test_missing_pycutest_explains_what_to_install(monkeypatch):
     monkeypatch.setitem(sys.modules, "pycutest", None)
     with pytest.raises(ImportError, match="CUTEst tasks need pycutest"):
@@ -258,6 +264,28 @@ def test_two_sizes_of_one_problem_are_different_tasks(x64):
     assert small.hash != large.hash
     assert np.isfinite(float(small.loss_fn(small.model)))
     assert np.isfinite(float(large.loss_fn(large.model)))
+
+
+@needs_cutest
+def test_brkmcc_with_its_box(x64):
+    """BRKMCC is unbounded below; its box keeps it off the pole (ADR 0004)."""
+    task = create_cutest_task(
+        "BRKMCC", box=(1.05, 6.0), global_min=0.16904267919645
+    )
+    (box,) = task.constraints
+    assert isinstance(box, Box)
+    np.testing.assert_array_equal(box.lower, [1.05, 1.05])
+    np.testing.assert_array_equal(box.upper, [6.0, 6.0])
+    assert task.global_min == 0.16904267919645
+    plain = create_cutest_task("BRKMCC", global_min=0.16904267919645)
+    assert plain.constraints == ()
+    assert task.hash != plain.hash
+
+
+@needs_cutest
+def test_box_must_contain_the_prescribed_start():
+    with pytest.raises(ValueError):
+        create_cutest_task("BRKMCC", box=(-1.0, 1.0), global_min=0.0)
 
 
 @needs_cutest
