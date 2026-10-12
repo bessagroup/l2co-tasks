@@ -58,7 +58,7 @@ A task whose objective is computed outside JAX (compiled Fortran, a simulator) g
 
 ### Task families (each in its own `_src/*_task.py` or module)
 
-Every family exposes a top-level `create_<name>_task(...)` factory that builds and returns a `Task`:
+Every family exposes a top-level `create_<name>_task(...)` factory that builds and returns a `Task`. A new family also needs a row in the "Available tasks" table of both `README.md` and `docs/index.md` (only the README's has a `global_min` column). `tests/test_readme_task_table.py` fails if a public factory has no row, or if a `conf/tasks/*.yaml` builds with a factory that isn't public.
 
 - `benchmark_task.py` — `create_bbob_task`, `create_bbob_noisy_task`, `create_cec2005_task`, `create_cec2017_task`, `create_cec2013lsgo_task`. Wraps `bbob_jax` functions; applies `scale_input` (maps `[0,1]^d` to the function's native bounds) and optional multiplicative-Gaussian `add_noise`. CEC 2017 tasks propagate `bbob_jax`'s `ValueError` below a function's `min_ndim` (hybrids need one dimension per subcomponent kernel) and record the bound in `tag["min_ndim"]`. CEC 2013 LSGO is a *fixed-instance* suite (official constants, not seed-sampled) defined only at its native dimensionality — 1000, or 905 for the overlapping `f13`/`f14`; its factory and `conf/tasks/cec2013lsgo.yaml` both require a bbob-jax newer than 2.0.0. `CEC2019Sampler` is an `f3dasm.Block` that enumerates the CEC 2019 suite.
 - `quadratic_task.py` — `create_quadratic_task`: random `min ||Wx − y||^2`.
