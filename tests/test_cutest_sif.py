@@ -91,6 +91,46 @@ def test_parameter_names_are_taken_as_written(sif):
     assert cutest_sizes(problem) == [{"N/2": 5}, {"N/2": 50}]
 
 
+@pytest.mark.parametrize("problem", ["SCURLY20", "SCURLY30"])
+def test_sizes_the_file_does_not_define_are_left_out(sif, problem):
+    # SCURLY20 and SCURLY30 list N = 10, below their window width K: the
+    # loop DO I N-K+1 N then reaches X(-9) and SIFDECODE refuses the file.
+    problem = sif(
+        problem,
+        """\
+*IE N                   10             $-PARAMETER
+ IE N                   100            $-PARAMETER
+""",
+    )
+    assert cutest_sizes(problem) == [{"N": 100}]
+
+
+def test_a_paired_size_the_file_does_not_define_is_left_out(sif):
+    # JIMACK's Fortran element code fixes the grid at M = 6, N = 12; its
+    # listed M = 2, N = 2 needs the file edited by hand.
+    problem = sif(
+        "JIMACK",
+        """\
+*IE M                   2              $-PARAMETER
+*IE N                   2              $-PARAMETER
+ IE M                   6              $-PARAMETER
+ IE N                   12             $-PARAMETER
+""",
+    )
+    assert cutest_sizes(problem) == [{"M": 6, "N": 12}]
+
+
+def test_the_same_size_elsewhere_is_kept(sif):
+    problem = sif(
+        "SCURLY10",
+        """\
+*IE N                   10             $-PARAMETER
+ IE N                   100            $-PARAMETER
+""",
+    )
+    assert cutest_sizes(problem) == [{"N": 10}, {"N": 100}]
+
+
 # Recorded optima -------------------------------------------------------------
 
 PER_SIZE = """\

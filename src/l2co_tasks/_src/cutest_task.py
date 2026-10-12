@@ -53,6 +53,7 @@ import pandas as pd
 from f3dasm import Block, ExperimentData
 
 # Local
+from .constraints import Box
 from .cutest_sif import INSTALL_HINT, sif_path
 from .host_objective import host_loss
 from .task import Task
@@ -271,6 +272,7 @@ def create_cutest_task(
     *,
     global_min: float | None = None,
     table: str | Path | None = None,
+    box: tuple[float, float] | None = None,
 ) -> Task:
     """Create a task from an unconstrained CUTEst problem (ADR 0004).
 
@@ -297,6 +299,14 @@ def create_cutest_task(
         The table to read ``global_min`` from. ``None`` (the default) is
         the committed one; a path points at a provisional table, as the
         floor-test run does with the table experiment's output.
+    box : tuple[float, float] or None, optional
+        ``(lower, upper)`` limits on every variable, for a problem that is
+        unbounded below without them: the task then carries a
+        :class:`~l2co_tasks.Box`. BRKMCC is the one so far, with
+        ``(1.05, 6.0)`` and a minimum of ``0.16904267919645`` (ADR 0004).
+        A boxed task is not the unconstrained problem the table describes,
+        so ``global_min`` must be given with it. ``None`` (the default)
+        leaves the task unconstrained.
 
     Returns
     -------
@@ -318,8 +328,15 @@ def create_cutest_task(
         If the problem has constraints or bounds, integer or boolean
         variables, no SIF file, or -- when ``global_min`` is not given --
         no usable row in the table: missing, excluded, or built from a SIF
-        file that has since changed.
+        file that has since changed. Also if ``box`` is given without
+        ``global_min``, or does not contain the prescribed start.
     """
+    if box is not None and global_min is None:
+        raise ValueError(
+            f"a box changes CUTEst problem {problem!r}, so the "
+            "unconstrained table's global_min does not apply: pass "
+            "global_min with box (ADR 0004)"
+        )
     pycutest = _pycutest()
     properties = pycutest.problem_properties(problem)
     if properties["constraints"] != "unconstrained":
@@ -367,11 +384,15 @@ def create_cutest_task(
         "cutest_origin": properties["origin"],
         "cutest_internal": properties["internal"],
     }
+    constraints = (
+        () if box is None else (Box(lower=float(box[0]), upper=float(box[1])),)
+    )
     return Task(
         model=jnp.asarray(compiled.x0),
         loss_fn=host_loss(_CutestOpener(problem, params)),
         global_min=float(global_min),
         tag=tag,
+        constraints=constraints,
     )
 
 

@@ -63,6 +63,22 @@ _PARAMETER = re.compile(
     r"(?P<value>\S+)\s+\$-PARAMETER"
 )
 
+#: Sizes a SIF file lists but does not define, per problem.
+#:
+#: * SCURLY20 and SCURLY30 list ``N = 10``, below their window width
+#:   ``K`` (20, 30): the loop ``DO I N-K+1 N`` then reaches ``X(-9)``, and
+#:   SIFDECODE refuses the file. CURLY20 and CURLY30, the unscaled
+#:   originals, list only ``N >= 100``.
+#: * JIMACK lists ``M = 2, N = 2``, but its Fortran element code fixes the
+#:   grid a second time (``PARAMETER ( M = 6, N = 12 )``), and the file
+#:   says to edit that by hand for another size. A parameter override
+#:   pairs a 2 x 2 grid with element code for 6 x 12.
+_UNDEFINED_SIZES: Mapping[str, tuple[dict[str, int], ...]] = {
+    "JIMACK": ({"M": 2, "N": 2},),
+    "SCURLY20": ({"N": 10},),
+    "SCURLY30": ({"N": 10},),
+}
+
 #: A recorded optimum: ``*LO SOLTN[(key)] [value]``.
 _SOLTN = re.compile(
     r"^\*\s*LO\s+SOLTN(?:\((?P<key>\d+)\))?(?:\s+(?P<value>\S+))?"
@@ -135,6 +151,10 @@ def cutest_sizes(problem: str) -> list[dict[str, int]]:
     * Several, with lists of different lengths: the parameter with the
       most values varies (the first in the file on a tie), and the others
       stay at their defaults, as VAREIGVL varies ``N`` and keeps ``M``.
+    * A listed size the file does not define is left out
+      (:data:`_UNDEFINED_SIZES`): SCURLY20 and SCURLY30 list ``N = 10``,
+      below their window width, and JIMACK lists ``M = 2, N = 2`` with its
+      element code fixed at ``M = 6, N = 12``.
 
     The task set also caps the number of variables at 100 (ADR 0004).
     That cap needs the compiled problem, so it is not applied here.
@@ -156,9 +176,12 @@ def cutest_sizes(problem: str) -> list[dict[str, int]]:
         return [{}]
     if len({len(values) for values in varied.values()}) == 1:
         paired = zip(*varied.values(), strict=True)
-        return [dict(zip(varied, combo, strict=True)) for combo in paired]
-    name = max(varied, key=lambda n: len(varied[n]))
-    return [{name: value} for value in varied[name]]
+        sizes = [dict(zip(varied, combo, strict=True)) for combo in paired]
+    else:
+        name = max(varied, key=lambda n: len(varied[n]))
+        sizes = [{name: value} for value in varied[name]]
+    undefined = _UNDEFINED_SIZES.get(problem, ())
+    return [size for size in sizes if size not in undefined]
 
 
 def _parse_value(text: str | None) -> float | None:
