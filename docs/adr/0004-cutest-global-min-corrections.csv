@@ -1,4 +1,5 @@
 problem,sif_params,change,run_global_min,run_source,global_min,basis
+AKIVA,,excluded,6.166042212417742,estimate,,"excluded: unbounded below as coded (HieLoW likelihood, as STRATEC: log(0) underflow and a 1e308 cap give -inf); the fit from x0 is 6.1660"
 ARGLINB,"M=20,N=10",value,4.6341,soltn,4.634146341463159,formula: closed form m(m-1)/(2(2m+1))
 ARGLINB,"M=100,N=50",value,24.62686567157621,estimate,24.626865671568662,"IPOPT, exact Hessian, from x0"
 ARGLINB,"M=200,N=100",value,49.62593516105045,estimate,49.62593516102146,"IPOPT, exact Hessian, from x0"
@@ -17,20 +18,23 @@ DMN15102LS,,valued,,,591.2449704197817,"best reached on DIAMON2DLS or DMN15102LS
 DMN15103LS,,valued,,,165.53098585793887,"best reached on DIAMON3DLS or DMN15103LS (same objective, derivatives written differently); not determined"
 DMN15332LS,,valued,,,159.9858823581732,"best reached (estimate, IPOPT, trust-constr); not determined"
 DMN15333LS,,valued,,,89.09610056127333,"best reached (estimate, IPOPT, trust-constr); not determined"
-DMN37142LS,,valued,,,186.63896314404957,"best reached (estimate, IPOPT, trust-constr); not determined"
+DMN37142LS,,valued,,,174.163312299012,"best reached (BFGS, Wolfe line search, CUTEst databank run 1791804537, budget 2000); not determined"
 DMN37143LS,,valued,,,96.76968976711024,"best reached (estimate, IPOPT, trust-constr); not determined"
 EDENSCH,N=36,value,219.28,soltn,219.2845920207645,"lowest attained (estimate, IPOPT, trust-constr)"
 EIGENCLS,M=2,value,7.222664583648658e-31,estimate,2.399175995921736e-31,"IPOPT, exact Hessian, from x0"
+ELATVIDU,,value,54.751118642231006,estimate,1.7127803548622025,"2-D search: f > 7000 for |x|_inf >= 10 (sampled to 1000); a grid of |x|_inf <= 10 with Newton polish of every local minimum gives 1.71278035486 at (3.40919, -2.17143); the run's 54.7511 is the third-lowest local minimum, at (2.27617, 0.86478); IPOPT reached 1.7127803548622025 in CUTEst databank run 1791804537"
 ENGVAL1,N=50,value,0.0,soltn,53.582214885207584,"lowest attained (estimate, IPOPT, trust-constr)"
 ENGVAL1,N=100,value,0.0,soltn,109.08813614309183,"lowest attained (estimate, IPOPT, trust-constr)"
 FBRAIN3LS,,valued,,,0.229165462647612,"best reached (estimate, IPOPT, trust-constr); not determined"
-FLETBV3M,N=100,value,-2.0398096590946486,estimate,-2.047187256128111,"trust-constr, exact Hessian, from x0"
+FLETBV3M,N=10,value,-0.002243307009077442,estimate,-0.0022542420451424493,"lowest reached: Newton polish from each of the 1024 snaps of the cosine-free part's minimizer to multiples of 2pi, 4000 wider snaps and 1000 random starts; not determined (the coupling-free bound is -0.0022679)"
+FLETBV3M,N=100,value,-2.0398096590946486,estimate,-2.0502542836016766,derivation: f >= (n-2) min phi + 2 min[(P/2)x^2 + phi] with the neighbour differences dropped = -2.0502542836017; reached -2.0502542835992 from x = -50pi (sin and cos terms both at their minimum)
 FLETCBV3,N=10,value,-0.03247453467224241,estimate,-0.03248887286862445,"formula: f = 0.5 p xLx + p c sum(x) - p kappa/h^2 sum(cos x); quadratic minimizer -c L^-1 1 snapped to 2pi multiples, Newton-polished; lower bound -0.03248905"
 FLETCBV3,N=100,valued,,,-178689.23426212365,determined (formula / convexity / NIST-certified match); see unsettled run notes
 FREUROTH,N=50,valued,,,5327.541242995261,"best reached (estimate, IPOPT, trust-constr); not determined"
 GROWTHLS,,value,0.0,soltn,1.0040405841046796,"lowest attained (estimate, IPOPT, trust-constr)"
 HAHN1LS,,valued,,,1.5324382853606047,determined (formula / convexity / NIST-certified match); see unsettled run notes
 HATFLDFL,,value,6.019706798214293e-05,estimate,6.0168040900586565e-05,"IPOPT, exact Hessian, from x0"
+HIELOW,,excluded,874.1654321149642,estimate,,"excluded: unbounded below as coded (HieLoW likelihood, as STRATEC: log(0) underflow and a 1e308 cap give -inf); the fit from x0 is 874.1654"
 INDEF,N=10,reason,,,,exclusion reason from the formula
 INDEF,N=50,reason,,,,exclusion reason from the formula
 INDEF,N=100,reason,,,,exclusion reason from the formula
@@ -60,7 +64,7 @@ PALMER5C,,value,0.050310687,soltn,2.128086666023386,"formula: linear least squar
 PALMER5D,,value,0.050310687,soltn,87.33939945055191,"formula: linear least squares, solved exactly"
 PALMER7C,,value,0.050310687,soltn,0.6019856410918898,"formula: linear least squares, solved exactly"
 PALMER8C,,value,0.050310687,soltn,0.15976806821340594,"formula: linear least squares, solved exactly"
-PARKCH,,value,1623.7432582172944,estimate,1623.7432582172933,"trust-constr, exact Hessian, from x0"
+PARKCH,,excluded,1623.7432582172944,estimate,,"excluded: unbounded below as coded (HieLoW likelihood, as STRATEC: log(0) underflow and a 1e308 cap give -inf); the fit from x0 is 1623.7433"
 PENALTY3,N/2=25,value,0.0009999962748155641,estimate,0.0009999953437089739,"IPOPT, exact Hessian, from x0"
 PENALTY3,N/2=50,value,0.0009998807907107472,estimate,0.0009998807907104492,"IPOPT, exact Hessian, from x0"
 POWERSUM,N=20,valued,,,0.0,determined (formula / convexity / NIST-certified match); see unsettled run notes
@@ -91,6 +95,8 @@ SSCOSINE,N=100,valued,,,-99.0,"formula: sum of N-1 cosines >= -(N-1); constructe
 STRATEC,,reason,,,,exclusion reason from the formula
 STRTCHDV,N=100,value,8.157099384879718e-30,estimate,0.0,"IPOPT, exact Hessian, from x0"
 TRIGON1,N=100,value,4.2668916164238157e-13,estimate,0.0,"IPOPT, exact Hessian, from x0"
+TRIGON2,N=10,value,2.654677512891725,estimate,1.0,"formula: f = 1 + sum((sqrt8 sin(7d^2) + sqrt6 sin(14d^2))^2 + d^2), d = x - 0.9, so f >= 1 and f(0.9) = 1"
+TRIGON2,N=100,value,23.864562812484575,estimate,1.0,"formula: f = 1 + sum((sqrt8 sin(7d^2) + sqrt6 sin(14d^2))^2 + d^2), d = x - 0.9, so f >= 1 and f(0.9) = 1"
 VESUVIALS,,value,1498.10480107646,estimate,991.410002865044,"IPOPT, exact Hessian, from x0"
 VIBRBEAM,,value,5.59334619419062,estimate,0.1564466516738807,"trust-constr, exact Hessian, from x0"
 WATSON,N=12,value,2.27559922e-09,soltn,4.723733329253445e-10,scipy trust-exact polish from x0
