@@ -39,9 +39,13 @@ its arms.
 
 - **One file next to the table:**
   `src/l2co_tasks/_src/cutest_global_min_overrides.csv`, with the columns
-  `problem`, `sif_params`, `global_min`, `excluded` and `basis`. A row
-  gives either a value or an exclusion reason, never both. The table and
-  the evidence for its values then change in the same PR.
+  `problem`, `sif_params`, `sif_sha256`, `global_min`, `excluded` and
+  `basis`. A row gives either a value or an exclusion reason, never both.
+  The table and the evidence for its values then change in the same PR.
+- **An override names the SIF file it was derived from.** If the
+  problem's file has changed since, the experiment reports the override
+  as stale and does not apply it, just as building a task refuses a
+  stale table row.
 - **What goes in:**
   - values from the formula: an exact solve (linear least squares), a
     closed form (ARGLINB, ARGLINC), a bound that is reached (CHAINWOO is
