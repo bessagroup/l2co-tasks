@@ -43,6 +43,13 @@ short benchmark optimiser* at task-creation time (`estimate_global_min`,
 currently short multi-restart Adam) — gaussian classification, spiral,
 MNIST-1D, the Adam-meta task. An estimate, **not** a guaranteed floor.
 
+**Recorded optimum** (`SOLTN`):
+The optimal value a CUTEst problem's SIF file states in a comment. The
+weakest evidence for a `global_min`: often rounded, copied from another
+problem or size, or a local optimum, so it counts only where a run
+reaches it (ADR 0006).
+_Avoid_: known optimum, published optimum.
+
 **Production portfolio**:
 The per-family set of optimizers the real L2CO study actually runs,
 defined in `l2co_experiments/conf/optimizers/` (`medium` for

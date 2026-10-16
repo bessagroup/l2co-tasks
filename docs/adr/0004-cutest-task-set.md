@@ -49,6 +49,8 @@ rest of this ADR fixes which problems go in and how each becomes a
   every optimizer (l2co ADR 0020), and CUTEst's bounds are per variable,
   often finite on only some variables. Building a task for a
   bound-constrained problem raises an error that cites l2co ADR 0020.
+  Since ADR 0006, problems whose only constraints are fixed variables
+  (class X) count as unconstrained: pycutest drops fixed variables.
 - **Excluded:** problems with integer or boolean variables, and problems
   unbounded below. Eight rows of the 2026-10-12 table are unbounded:
   - **INDEF** (n = 10, 50, 100): the objective is `sum(x)` plus bounded
@@ -137,6 +139,11 @@ exactly `x0`, and the other members are spread relative to each
 coordinate's size.
 
 ## `global_min`
+
+> [!NOTE]
+> ADR 0006 replaces the rule below (the lower of the estimate and
+> `SOLTN`) and the separate floor-test run. This section records how the
+> first committed table was made.
 
 ADR 0001 requires `global_min` to be a **floor**, and it is part of the
 task's identity. pycutest exposes no optimal values. Many SIF files
