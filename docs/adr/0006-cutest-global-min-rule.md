@@ -56,9 +56,12 @@ its arms.
   - exclusions, with the reason from the formula (INDEF and BRKMCC are
     unbounded below) or from the code (STRATEC, AKIVA, HIELOW and PARKCH
     are unbounded below as coded).
-- **What stays out:** values the arms reach again by themselves. 37 of
-  the 102 corrections came from an exact-Hessian IPOPT or trust-constr
-  run from `x0`. Those are arms now, so their rows need no override.
+- **What stays out:** values the arms reach again by themselves. 52 of
+  the 102 corrections are such values: 37 from an exact-Hessian IPOPT
+  or trust-constr run from `x0`, and 15 the lowest of the estimate and
+  those two runs. They are arms now, so their rows need no override. Of
+  the other 50, 39 become value overrides, 8 become exclusion overrides
+  and 3 are sizes that are no longer listed at all.
 - **One row per size.** A derivation that holds for every `n` is written
   out for each listed size. The file holds values, not formulas.
 - **A value override is still checked against the arms.** The stored
