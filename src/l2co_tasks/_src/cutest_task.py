@@ -16,12 +16,17 @@ What a CUTEst task looks like:
   problem, and CUTEst variables differ in scale by orders of magnitude.
 * **Unconstrained problems only.** l2co passes one ``(lo, hi)`` pair to
   every optimizer (l2co ADR 0020), and CUTEst's bounds are per variable.
+  Problems whose only constraints are fixed variables count as
+  unconstrained: pycutest drops fixed variables, so the model holds the
+  free ones (ADR 0006).
 * **``global_min`` comes from a committed table**, one row per (problem,
   size), so a task's identity is the same on every machine. A row also
   records the hash of the problem's SIF file: a problem corrected upstream
   no longer matches its row, and building it refuses until the table is
   regenerated. Passing ``global_min`` explicitly bypasses the table; that
-  is how the table itself is built.
+  is how the table itself is built. The values the experiment can't reach
+  by itself -- from the formula, from a special run, or an exclusion --
+  are committed beside it as overrides (ADR 0006).
 * **The tag is flat**, with the SIF parameters as one canonical string
   (``"N=10"``). A dict inside a tag would not hash the same in every
   process.
@@ -66,18 +71,22 @@ __status__ = "Stable"
 # =============================================================================
 
 __all__ = [
+    "CutestOverride",
     "CutestTableSampler",
     "create_cutest_task",
+    "cutest_global_min_overrides",
 ]
 
 #: The committed ``global_min`` table (ADR 0004).
 _TABLE_PATH = Path(__file__).with_name("cutest_global_min.csv")
 
 #: Its columns, in order. ``sif_params`` is the canonical string
-#: (:func:`_sif_params_str`); ``source`` is ``"estimate"`` or ``"soltn"``;
-#: ``excluded`` is empty, or the reason the problem is left out, in which
-#: case ``global_min`` is empty. ``n`` may be empty only on an excluded
-#: row: a size that fails to build has no known number of variables.
+#: (:func:`_sif_params_str`); ``source`` names the evidence the value rests
+#: on: ``"override"``, ``"reached"`` or ``"soltn"`` (ADR 0006), or
+#: ``"estimate"`` on a row written before ADR 0006; ``excluded`` is empty,
+#: or the reason the problem is left out, in which case ``global_min`` is
+#: empty. ``n`` may be empty only on an excluded row: a size that fails to
+#: build has no known number of variables.
 _TABLE_COLUMNS = (
     "problem",
     "sif_params",
@@ -87,6 +96,26 @@ _TABLE_COLUMNS = (
     "source",
     "excluded",
 )
+
+#: The committed overrides (ADR 0006): values and exclusions the table
+#: experiment applies instead of what it reaches by itself.
+_OVERRIDES_PATH = Path(__file__).with_name("cutest_global_min_overrides.csv")
+
+#: Their columns, in order. A row gives ``global_min`` or ``excluded``,
+#: never both, and always a ``basis``.
+_OVERRIDE_COLUMNS = (
+    "problem",
+    "sif_params",
+    "sif_sha256",
+    "global_min",
+    "excluded",
+    "basis",
+)
+
+#: The constraint classes built as unconstrained tasks: pycutest drops
+#: fixed variables, so a ``"fixed"`` problem is unconstrained in the
+#: variables that remain (ADR 0006).
+_UNCONSTRAINED_CLASSES = ("unconstrained", "fixed")
 
 #: pycutest's value for "no bound".
 _NO_BOUND = 1e20
@@ -227,6 +256,107 @@ def _table_global_min(
     return row.global_min
 
 
+@dataclass(frozen=True)
+class CutestOverride:
+    """One committed override of the CUTEst ``global_min`` table.
+
+    The table experiment applies an override instead of, or on top of,
+    what its arms reach (ADR 0006). Exactly one of ``global_min`` and
+    ``excluded`` is set.
+
+    Attributes
+    ----------
+    sif_sha256 : str
+        sha256 of the SIF file the override was derived from. If the
+        problem's file has changed since, the override is stale.
+    global_min : float or None
+        The value: from the formula, or reached only by a special run. The
+        table stores the lower of it and what the arms reach.
+    excluded : str
+        The reason the row is excluded; empty for a value override.
+    basis : str
+        The evidence: the formula, the derivation or the run.
+    """
+
+    sif_sha256: str
+    global_min: float | None
+    excluded: str
+    basis: str
+
+
+@functools.cache
+def _read_overrides(path: Path) -> dict[tuple[str, str], CutestOverride]:
+    """The overrides at ``path``, keyed by ``(problem, sif_params)``."""
+    rows: dict[tuple[str, str], CutestOverride] = {}
+    with path.open(newline="") as f:
+        reader = csv.DictReader(f)
+        if tuple(reader.fieldnames or ()) != _OVERRIDE_COLUMNS:
+            raise ValueError(
+                f"{path} has columns {reader.fieldnames}, expected "
+                f"{list(_OVERRIDE_COLUMNS)}"
+            )
+        for record in reader:
+            key = (record["problem"], record["sif_params"])
+            if key in rows:
+                raise ValueError(f"{path} lists {key} twice")
+            value, excluded = record["global_min"], record["excluded"]
+            if bool(value) == bool(excluded):
+                raise ValueError(
+                    f"{path} gives {key} "
+                    + ("both a value and" if value else "neither a value nor")
+                    + " an exclusion; an override gives exactly one"
+                )
+            if not record["basis"].strip():
+                raise ValueError(f"{path} gives {key} no basis")
+            if not record["sif_sha256"]:
+                raise ValueError(f"{path} gives {key} no sif_sha256")
+            global_min = float(value) if value else None
+            if global_min is not None and not math.isfinite(global_min):
+                raise ValueError(
+                    f"{path} gives {key} a non-finite value, {value}"
+                )
+            rows[key] = CutestOverride(
+                sif_sha256=record["sif_sha256"],
+                global_min=global_min,
+                excluded=excluded,
+                basis=record["basis"],
+            )
+    return rows
+
+
+def cutest_global_min_overrides(
+    path: str | Path | None = None,
+) -> dict[tuple[str, str], CutestOverride]:
+    """The committed overrides of the CUTEst ``global_min`` table.
+
+    The values and exclusions the table experiment can't reach by itself
+    (ADR 0006): formula values, values only a special run reached, and
+    exclusions, each with its basis. l2co_experiments'
+    ``cutest_global_min_table`` reads them; building a task does not.
+
+    Parameters
+    ----------
+    path : str or Path or None, optional
+        The overrides file; ``None`` (the default) is the committed one.
+
+    Returns
+    -------
+    dict[tuple[str, str], CutestOverride]
+        Keyed by ``(problem, sif_params)``, with ``sif_params`` the
+        canonical string the table uses (``"N=10"``, ``""`` for none).
+
+    Raises
+    ------
+    ValueError
+        If the file's columns are wrong, or a row is listed twice, gives
+        both a value and an exclusion or neither, has no basis or SIF
+        hash, or has a non-finite value.
+    """
+    return dict(
+        _read_overrides(_OVERRIDES_PATH if path is None else Path(path))
+    )
+
+
 class _CutestObjective:
     """A compiled CUTEst problem as a host objective (ADR 0003)."""
 
@@ -278,7 +408,10 @@ def create_cutest_task(
 
     Needs the ``[cutest]`` extra and a CUTEst installation (``CUTEST``,
     ``SIFDECODE`` and ``MASTSIF`` set). The problem is compiled on first
-    use, into ``PYCUTEST_CACHE``.
+    use, into ``PYCUTEST_CACHE``. A problem whose only constraints are
+    fixed variables (class X) is unconstrained in the variables that
+    remain once pycutest drops the fixed ones, and is built as such
+    (ADR 0006).
 
     Parameters
     ----------
@@ -311,22 +444,24 @@ def create_cutest_task(
     Returns
     -------
     Task
-        A task whose model is the problem's prescribed start ``x0``, in
-        the problem's own coordinates, and whose loss is a host loss over
-        the compiled problem. ``pass_rng`` is ``False`` and there is no
-        dataset. The tag holds ``task_name`` (``"cutest"``), ``fn_name``
-        (the problem), ``dimensionality``, ``noise`` (``0.0``),
-        ``sif_params`` (canonical string), ``sif_sha256`` and the
-        classification fields ``cutest_objective``, ``cutest_regular``,
-        ``cutest_degree``, ``cutest_origin`` and ``cutest_internal``.
+        A task whose model is the problem's prescribed start ``x0`` (its
+        free variables), in the problem's own coordinates, and whose loss
+        is a host loss over the compiled problem. ``pass_rng`` is
+        ``False`` and there is no dataset. The tag holds ``task_name``
+        (``"cutest"``), ``fn_name`` (the problem), ``dimensionality``,
+        ``noise`` (``0.0``), ``sif_params`` (canonical string),
+        ``sif_sha256`` and the classification fields
+        ``cutest_objective``, ``cutest_regular``, ``cutest_degree``,
+        ``cutest_origin`` and ``cutest_internal``.
 
     Raises
     ------
     ImportError
         If pycutest or a CUTEst installation is missing.
     ValueError
-        If the problem has constraints or bounds, integer or boolean
-        variables, no SIF file, or -- when ``global_min`` is not given --
+        If the problem has constraints or bounds (other than fixed
+        variables), integer or boolean variables, no SIF file, or -- when
+        ``global_min`` is not given --
         no usable row in the table: missing, excluded, or built from a SIF
         file that has since changed. Also if ``box`` is given without
         ``global_min``, or does not contain the prescribed start.
@@ -339,12 +474,13 @@ def create_cutest_task(
         )
     pycutest = _pycutest()
     properties = pycutest.problem_properties(problem)
-    if properties["constraints"] != "unconstrained":
+    if properties["constraints"] not in _UNCONSTRAINED_CLASSES:
         raise ValueError(
             f"CUTEst problem {problem!r} has {properties['constraints']} "
-            "constraints. Only unconstrained problems are supported: "
-            "optimizers take one (lo, hi) box for every parameter (l2co "
-            "ADR 0020, ADR 0004)."
+            "constraints. Only unconstrained problems are supported, and "
+            "those whose only constraints are fixed variables: optimizers "
+            "take one (lo, hi) box for every parameter (l2co ADR 0020, "
+            "ADR 0004)."
         )
     params = _canonical_sif_params(sif_params)
     params_str = _sif_params_str(params)
@@ -366,9 +502,10 @@ def create_cutest_task(
         )
     if np.any(compiled.bl > -_NO_BOUND) or np.any(compiled.bu < _NO_BOUND):
         raise ValueError(
-            f"CUTEst problem {problem!r} is classified unconstrained but "
-            "declares bounds; only unconstrained problems are supported "
-            "(l2co ADR 0020)"
+            f"CUTEst problem {problem!r} is classified "
+            f"{properties['constraints']} but bounds variables that "
+            "pycutest leaves free; only unconstrained problems are "
+            "supported (l2co ADR 0020)"
         )
 
     tag = {
@@ -407,14 +544,34 @@ class CutestTableSampler(Block):
     so the tasks read their ``global_min`` from the table that listed
     them.
 
+    One table holds every (problem, size), whatever task set it belongs
+    to; ``min_n`` and ``max_n`` pick a set's sizes out of it (ADR 0006).
+
     Parameters
     ----------
     table : str or Path or None, optional
         The table to list; ``None`` (the default) is the committed one.
+    min_n, max_n : int or None, optional
+        List only rows with ``min_n <= n <= max_n`` variables; ``None``
+        (the default) leaves that side open.
     """
 
-    def __init__(self, table: str | Path | None = None):
+    def __init__(
+        self,
+        table: str | Path | None = None,
+        min_n: int | None = None,
+        max_n: int | None = None,
+    ):
         self.table = None if table is None else Path(table)
+        self.min_n = None if min_n is None else int(min_n)
+        self.max_n = None if max_n is None else int(max_n)
+
+    def _in_range(self, n: int | None) -> bool:
+        if n is None:
+            return False
+        return (self.min_n is None or n >= self.min_n) and (
+            self.max_n is None or n <= self.max_n
+        )
 
     def call(self, data: ExperimentData, **kwargs: Any) -> ExperimentData:
         """The task-set rows, on ``data``'s domain.
@@ -422,18 +579,20 @@ class CutestTableSampler(Block):
         Raises
         ------
         ValueError
-            If the table has no row with a value: a CUTEst task set with
-            no tasks is a misconfiguration, not an empty result.
+            If the table has no row with a value in the size range: a
+            CUTEst task set with no tasks is a misconfiguration, not an
+            empty result.
         """
         path = _TABLE_PATH if self.table is None else self.table
         rows = [
             {"problem": problem, "sif_params": params}
             for (problem, params), row in sorted(_read_table(path).items())
-            if not row.excluded
+            if not row.excluded and self._in_range(row.n)
         ]
         if not rows:
             raise ValueError(
-                f"the CUTEst table {path} has no row with a value; build it "
+                f"the CUTEst table {path} has no row with a value and "
+                f"{self.min_n or 0} <= n <= {self.max_n or 'inf'}; build it "
                 "with l2co_experiments' cutest_global_min_table (ADR 0004)"
             )
         domain = data.domain

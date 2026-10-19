@@ -1,5 +1,7 @@
 # Unconstrained CUTEst problems (ADR 0004): one task per valued row of the
-# global_min table, at the sizes the table lists (at most 100 variables).
+# global_min table with at most 100 variables. Problems whose only
+# constraints are fixed variables are included, with those variables
+# dropped (ADR 0006).
 # Needs the [cutest] extra and a CUTEst installation (CUTEST, SIFDECODE,
 # MASTSIF set). A task's model is the problem's prescribed start x0, in the
 # problem's own coordinates, so pair this set with the relative_normal
@@ -10,6 +12,10 @@ sampler:
   # as l2co_experiments' cutest_floor_test does with the table
   # experiment's output; task_kwargs.table follows it.
   table: null
+  # One table holds every CUTEst size; this set is the n <= 100 part of
+  # it (ADR 0006).
+  min_n: null
+  max_n: 100
 sampler_kwargs:
 
 experimentdata:
