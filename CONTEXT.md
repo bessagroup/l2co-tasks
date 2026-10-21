@@ -146,7 +146,7 @@ _Avoid_: initial guess.
 The landscape a benchmark function is a version of: functions that
 evaluate the same defining formula and differ only by shift, rotation,
 the size of an existing conditioning, BBOB's oscillation and asymmetry
-maps, a generator parameter, noise or embedding share one (ADR 0006).
+maps, a generator parameter, noise or embedding share one (ADR 0007).
 A function-disjoint split assigns whole base landscapes to one side.
 Looked up by `fn_name` with `base_landscape`.
 _Avoid_: function family (fuzzy at the edges), base function (reads as

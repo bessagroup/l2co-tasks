@@ -1,5 +1,5 @@
 """
-Which benchmark functions share a base landscape (ADR 0006).
+Which benchmark functions share a base landscape (ADR 0007).
 
 A function-disjoint train/test split is only disjoint if it keeps variants
 of one landscape on the same side. Names do not ensure that: all 30
@@ -10,7 +10,7 @@ separable and rotated versions of the same function. A table that ships
 with the package assigns each function of the analytic suites to a base
 landscape, so a split can work on groups instead of names.
 
-The rule (ADR 0006): two functions share a base landscape when they
+The rule (ADR 0007): two functions share a base landscape when they
 evaluate the same defining formula and differ only by shift, rotation, the
 size of an existing conditioning, BBOB's oscillation and asymmetry maps,
 a generator parameter, noise, or embedding. Rounded variants (step
@@ -100,5 +100,5 @@ def base_landscape(fn_name: str) -> str:
         raise KeyError(
             f"No base landscape for fn_name {fn_name!r}; the table covers "
             f"the bbob (and bbob_embedded), bbob_noisy, cec2005 and cec2017 "
-            f"functions (ADR 0006)."
+            f"functions (ADR 0007)."
         ) from None

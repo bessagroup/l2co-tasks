@@ -1,9 +1,9 @@
-"""Tests for the base-landscape table (ADR 0006).
+"""Tests for the base-landscape table (ADR 0007).
 
 The table must cover every function of the analytic suites that ship as
 task configs, and nothing else, so a function added to a suite cannot
 slip through a function-disjoint split unmapped. The pair tests pin the
-borderline calls ADR 0006 makes, so a later edit that flips one fails
+borderline calls ADR 0007 makes, so a later edit that flips one fails
 here rather than silently changing which functions a split keeps apart.
 """
 
@@ -49,7 +49,7 @@ def test_noisy_functions_join_noiseless_groups() -> None:
     assert noisy <= noiseless
 
 
-def test_the_grouping_adr_0006_records() -> None:
+def test_the_grouping_adr_0007_records() -> None:
     assert len(set(base_landscapes().values())) == 58
 
 
@@ -121,7 +121,7 @@ def test_hybrids_and_compositions_are_their_own_groups() -> None:
 
 
 def test_unknown_name_raises_with_the_adr() -> None:
-    with pytest.raises(KeyError, match="ADR 0006"):
+    with pytest.raises(KeyError, match="ADR 0007"):
         base_landscape("not_a_function")
 
 
