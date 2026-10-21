@@ -6,6 +6,7 @@ L2CO Tasks - Optimization tasks compatible with the L2CO library
 # =============================================================================
 
 # Local
+from ._src.base_landscape import base_landscape, base_landscapes
 from ._src.benchmark_task import (
     CEC2019Sampler,
     create_bbob_noisy_task,
@@ -68,6 +69,8 @@ __all__ = [
     "StokesTaskSampler",
     "Task",
     "ViscousBurgersTaskSampler",
+    "base_landscape",
+    "base_landscapes",
     "create_bbob_noisy_task",
     "create_bbob_task",
     "create_cec2005_task",

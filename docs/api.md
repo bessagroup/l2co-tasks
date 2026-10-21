@@ -77,6 +77,14 @@ Benchmark a task's best achievable loss with a short, seeded, multi-restart Adam
 
 ::: l2co_tasks.estimate_global_min
 
+## Base landscapes
+
+Which functions of the analytic suites (BBOB and its embedded variants, BBOB-noisy, CEC 2005, CEC 2017) are versions of one landscape, so a function-disjoint train/test split can keep them on the same side (ADR 0007). Keyed by the task's `fn_name` tag.
+
+::: l2co_tasks.base_landscape
+
+::: l2co_tasks.base_landscapes
+
 ## BBOB benchmark functions
 
 ::: l2co_tasks.create_bbob_task

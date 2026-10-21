@@ -139,3 +139,15 @@ The starting point a problem's source defines as part of the problem,
 such as CUTEst's `x0`. A task with one keeps it as its model, in the
 problem's own coordinates (ADR 0004).
 _Avoid_: initial guess.
+
+### Benchmark structure
+
+**Base landscape**:
+The landscape a benchmark function is a version of: functions that
+evaluate the same defining formula and differ only by shift, rotation,
+the size of an existing conditioning, BBOB's oscillation and asymmetry
+maps, a generator parameter, noise or embedding share one (ADR 0007).
+A function-disjoint split assigns whole base landscapes to one side.
+Looked up by `fn_name` with `base_landscape`.
+_Avoid_: function family (fuzzy at the edges), base function (reads as
+one BBOB function, while a base landscape spans suites).
