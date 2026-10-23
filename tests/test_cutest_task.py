@@ -20,9 +20,16 @@ import pytest
 from f3dasm import ExperimentData
 from f3dasm.design import Domain
 
-from l2co_tasks import Box, CutestTableSampler, Task, create_cutest_task
+from l2co_tasks import (
+    Box,
+    CutestTableSampler,
+    Task,
+    create_cutest_task,
+    cutest_global_min_overrides,
+)
 from l2co_tasks._src import cutest_task
 from l2co_tasks._src.cutest_task import (
+    _OVERRIDE_COLUMNS,
     _TABLE_COLUMNS,
     _TABLE_PATH,
     _canonical_sif_params,
@@ -53,6 +60,14 @@ def _write_table(path, rows):
     with path.open("w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(_TABLE_COLUMNS)
+        writer.writerows(rows)
+    return path
+
+
+def _write_overrides(path, rows):
+    with path.open("w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(_OVERRIDE_COLUMNS)
         writer.writerows(rows)
     return path
 
@@ -123,6 +138,45 @@ def test_sampler_refuses_a_table_without_values(tmp_path):
         _sampled(CutestTableSampler(table=path), tmp_path)
 
 
+def test_sampler_lists_only_rows_in_its_size_range(tmp_path):
+    """One table, several task sets: min_n / max_n pick a set (ADR 0006)."""
+    path = _write_table(
+        tmp_path / "sizes.csv",
+        [
+            ("ARWHEAD", "N=100", 100, "sha", 0.0, "reached", ""),
+            ("ARWHEAD", "N=500", 500, "sha", 0.0, "reached", ""),
+            ("ARWHEAD", "N=1000", 1000, "sha", 0.0, "reached", ""),
+            ("ARWHEAD", "N=5000", 5000, "sha", 0.0, "reached", ""),
+            ("JIMACK", "", "", "sha", "", "", "fails to build: x"),
+        ],
+    )
+
+    def listed(**kwargs):
+        rows = _sampled(CutestTableSampler(table=path, **kwargs), tmp_path)
+        return [row["sif_params"] for row in rows]
+
+    assert listed(max_n=100) == ["N=100"]
+    assert listed(min_n=101, max_n=1000) == ["N=1000", "N=500"]
+    assert listed(min_n=1001) == ["N=5000"]
+    assert len(listed()) == 4
+    with pytest.raises(ValueError, match="no row with a value"):
+        listed(min_n=10_000)
+
+
+def test_shipped_task_set_is_the_n_up_to_100_part():
+    from importlib import resources
+
+    from omegaconf import OmegaConf
+
+    raw = OmegaConf.create(
+        resources.files("l2co_tasks.conf.tasks")
+        .joinpath("cutest.yaml")
+        .read_text()
+    )
+    assert raw.sampler.min_n is None
+    assert raw.sampler.max_n == 100
+
+
 def test_shipped_table_parses():
     rows = _read_table(_TABLE_PATH)
     for (problem, _), row in rows.items():
@@ -155,6 +209,63 @@ def test_valued_row_without_n_is_refused(tmp_path):
     path = _write_table(tmp_path / "no_n.csv", [row])
     with pytest.raises(ValueError, match="only an excluded row"):
         _read_table(path)
+
+
+def test_shipped_overrides_parse():
+    overrides = cutest_global_min_overrides()
+    assert overrides
+    for override in overrides.values():
+        assert (override.global_min is None) != (not override.excluded)
+        assert override.basis
+
+
+def test_shipped_overrides_agree_with_the_shipped_table():
+    """Every override is the committed row's value or exclusion (ADR 0006).
+
+    And every excluded row is an override, so a table run that applies the
+    overrides reproduces every exclusion.
+    """
+    table = _read_table(_TABLE_PATH)
+    overrides = cutest_global_min_overrides()
+    for key, override in overrides.items():
+        row = table[key]
+        assert row.sif_sha256 == override.sif_sha256, key
+        if override.excluded:
+            assert row.excluded == override.excluded, key
+        else:
+            assert row.global_min == override.global_min, key
+    excluded = {key for key, row in table.items() if row.excluded}
+    assert excluded <= {k for k, o in overrides.items() if o.excluded}
+
+
+@pytest.mark.parametrize(
+    ("row", "match"),
+    [
+        (("ROSENBR", "", "sha", 0.0, "unbounded", "formula"), "both"),
+        (("ROSENBR", "", "sha", "", "", "formula"), "neither"),
+        (("ROSENBR", "", "sha", 0.0, "", " "), "no basis"),
+        (("ROSENBR", "", "", 0.0, "", "formula"), "no sif_sha256"),
+        (("ROSENBR", "", "sha", "inf", "", "formula"), "non-finite"),
+    ],
+)
+def test_malformed_override_is_refused(tmp_path, row, match):
+    path = _write_overrides(tmp_path / "overrides.csv", [row])
+    with pytest.raises(ValueError, match=match):
+        cutest_global_min_overrides(path)
+
+
+def test_override_listing_a_size_twice_is_refused(tmp_path):
+    row = ("ROSENBR", "", "sha", 0.0, "", "formula")
+    path = _write_overrides(tmp_path / "overrides.csv", [row, row])
+    with pytest.raises(ValueError, match="twice"):
+        cutest_global_min_overrides(path)
+
+
+def test_overrides_with_wrong_columns_are_refused(tmp_path):
+    path = tmp_path / "overrides.csv"
+    path.write_text("problem,global_min\nROSENBR,0.0\n")
+    with pytest.raises(ValueError, match="expected"):
+        cutest_global_min_overrides(path)
 
 
 def test_table_row_is_looked_up_by_problem_and_size(table):
@@ -298,11 +409,25 @@ def test_hash_is_stable_across_builds():
 
 @needs_cutest
 @pytest.mark.parametrize(
-    ("problem", "kind"), [("ALLINIT", "bound"), ("BOX2", "fixed")]
+    ("problem", "kind"), [("ALLINIT", "bound"), ("HS21", "linear")]
 )
 def test_constrained_problem_is_refused(problem, kind):
     with pytest.raises(ValueError, match=f"has {kind} constraints"):
         create_cutest_task(problem, global_min=0.0)
+
+
+@needs_cutest
+def test_fixed_variables_are_dropped(x64):
+    """A class-X problem is unconstrained in its free variables (ADR 0006).
+
+    BIGGS3 is BIGGS6 with three of its six variables fixed.
+    """
+    task = create_cutest_task("BIGGS3", global_min=0.0)
+    assert task.dimensionality == 3
+    assert task.constraints == ()
+    value, grad = jax.value_and_grad(task.loss_fn)(task.model)
+    assert np.isfinite(float(value))
+    assert grad.shape == (3,)
 
 
 @needs_cutest
