@@ -29,7 +29,8 @@ from l2co_tasks import Task, create_tasks_experimentdata
 
 # Configs whose data generator needs the BBOB-noisy suite, which ships
 # with bbob-jax releases newer than 1.8.0; on older installs they skip.
-# The balanced composites include a bbob_noisy ``parts`` entry.
+# The balanced and joint-selection composites include a bbob_noisy
+# ``parts`` entry.
 _NEEDS_BBOB_NOISY = {
     "bbob_noisy",
     "bbob_balanced_train",
@@ -37,6 +38,8 @@ _NEEDS_BBOB_NOISY = {
     "bbob_headroom_train",
     "bbob_headroom_test",
     "bbob_headroom_toy",
+    "joint_selection_train",
+    "joint_selection_test",
 }
 _HAS_BBOB_NOISY = hasattr(bbob_jax, "bbob_noisy_registry")
 
@@ -312,6 +315,9 @@ _SLOW = {
     # identity sampler admits no shrinking overlay).
     "bbob_balanced_train",
     "bbob_balanced_test",
+    # 252- and 233-task joint-selection composites, likewise in full.
+    "joint_selection_train",
+    "joint_selection_test",
 }
 
 
