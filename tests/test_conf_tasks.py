@@ -315,7 +315,7 @@ _SLOW = {
     # identity sampler admits no shrinking overlay).
     "bbob_balanced_train",
     "bbob_balanced_test",
-    # 252- and 233-task joint-selection composites, likewise in full.
+    # 100-task joint-selection composites, likewise in full.
     "joint_selection_train",
     "joint_selection_test",
 }
