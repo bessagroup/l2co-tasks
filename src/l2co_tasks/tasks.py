@@ -17,6 +17,7 @@ from ._src.benchmark_task import (
     create_cec2013lsgo_task,
     create_cec2017_task,
 )
+from ._src.cutest_task import create_cutest_task
 from ._src.embedded_task import create_embedded_bbob_task
 from ._src.euler import create_euler_task
 from ._src.gaussian_meta import create_gaussian_meta_task
@@ -44,6 +45,7 @@ __all__ = [
     "create_cec2005_task",
     "create_cec2013lsgo_task",
     "create_cec2017_task",
+    "create_cutest_task",
     "create_embedded_bbob_task",
     "create_euler_task",
     "create_gaussian_meta_task",

@@ -1,0 +1,526 @@
+"""CUTEst problems as tasks (l2co-tasks ADR 0004).
+
+The first group runs everywhere: the canonical SIF-parameter string, the
+committed ``global_min`` table and its refusals, the opener, and the
+error when pycutest is missing. The second group needs pycutest and a
+CUTEst installation (``CUTEST``, ``SIFDECODE`` and ``MASTSIF`` set) and
+skips without them, as it does in CI.
+"""
+
+from __future__ import annotations
+
+import csv
+import sys
+
+import cloudpickle
+import jax
+import jax.numpy as jnp
+import numpy as np
+import pytest
+from f3dasm import ExperimentData
+from f3dasm.design import Domain
+
+from l2co_tasks import (
+    Box,
+    CutestTableSampler,
+    Task,
+    create_cutest_task,
+    cutest_global_min_overrides,
+)
+from l2co_tasks._src import cutest_task
+from l2co_tasks._src.cutest_task import (
+    _OVERRIDE_COLUMNS,
+    _TABLE_COLUMNS,
+    _TABLE_PATH,
+    _canonical_sif_params,
+    _CutestOpener,
+    _read_table,
+    _sif_params_str,
+    _table_global_min,
+)
+
+
+def _cutest_available() -> bool:
+    try:
+        import pycutest  # noqa: F401
+    except (ImportError, RuntimeError):
+        return False
+    return True
+
+
+needs_cutest = pytest.mark.skipif(
+    not _cutest_available(),
+    reason="needs pycutest and a CUTEst installation (CUTEST, SIFDECODE, "
+    "MASTSIF)",
+)
+
+
+def _write_table(path, rows):
+    # csv quoting matters: a SIF-parameter string like "M=2,N=2" has a comma.
+    with path.open("w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(_TABLE_COLUMNS)
+        writer.writerows(rows)
+    return path
+
+
+def _write_overrides(path, rows):
+    with path.open("w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(_OVERRIDE_COLUMNS)
+        writer.writerows(rows)
+    return path
+
+
+@pytest.fixture
+def table(tmp_path, monkeypatch):
+    """Point the factory at a temporary table; returns a writer."""
+
+    def write(rows):
+        path = _write_table(tmp_path / "cutest_global_min.csv", rows)
+        monkeypatch.setattr(cutest_task, "_TABLE_PATH", path)
+        return path
+
+    return write
+
+
+# Runs everywhere -------------------------------------------------------------
+
+
+def test_sif_params_have_one_canonical_string():
+    params = _canonical_sif_params({"ZETA": 20.0, "N": 10})
+    assert params == (("N", 10), ("ZETA", 20.0))
+    assert _sif_params_str(params) == "N=10,ZETA=20.0"
+    assert _sif_params_str(_canonical_sif_params(None)) == ""
+
+
+def test_sif_params_string_is_parsed():
+    assert _canonical_sif_params("N=10,M=20") == (("M", 20), ("N", 10))
+    assert _canonical_sif_params("ZETA=20.0") == (("ZETA", 20.0),)
+    assert _canonical_sif_params("") == ()
+    params = _canonical_sif_params({"N": 10, "ZETA": 20.0})
+    assert _canonical_sif_params(_sif_params_str(params)) == params
+
+
+def test_malformed_sif_params_string_is_refused():
+    with pytest.raises(ValueError, match="NAME=VALUE"):
+        _canonical_sif_params("N10")
+
+
+def _sampled(sampler, tmp_path):
+    data = ExperimentData(domain=Domain(), project_dir=tmp_path)
+    out = sampler.call(data=data)
+    return [dict(sample.input_data) for _, sample in out]
+
+
+def test_sampler_lists_valued_rows_of_a_given_table(tmp_path):
+    path = _write_table(
+        tmp_path / "provisional.csv",
+        [
+            ("EXTROSNB", "N=10", 10, "sha", 0.0, "soltn", ""),
+            ("JIMACK", "M=2,N=2", "", "sha", "", "", "fails to build: x"),
+            ("ROSENBR", "", 2, "sha", 0.0, "estimate", ""),
+        ],
+    )
+    rows = _sampled(CutestTableSampler(table=path), tmp_path)
+    assert rows == [
+        {"problem": "EXTROSNB", "sif_params": "N=10"},
+        {"problem": "ROSENBR", "sif_params": ""},
+    ]
+
+
+def test_sampler_refuses_a_table_without_values(tmp_path):
+    path = _write_table(
+        tmp_path / "empty.csv",
+        [("JIMACK", "M=2,N=2", "", "sha", "", "", "fails to build: x")],
+    )
+    with pytest.raises(ValueError, match="no row with a value"):
+        _sampled(CutestTableSampler(table=path), tmp_path)
+
+
+def test_sampler_lists_only_rows_in_its_size_range(tmp_path):
+    """One table, several task sets: min_n / max_n pick a set (ADR 0006)."""
+    path = _write_table(
+        tmp_path / "sizes.csv",
+        [
+            ("ARWHEAD", "N=100", 100, "sha", 0.0, "reached", ""),
+            ("ARWHEAD", "N=500", 500, "sha", 0.0, "reached", ""),
+            ("ARWHEAD", "N=1000", 1000, "sha", 0.0, "reached", ""),
+            ("ARWHEAD", "N=5000", 5000, "sha", 0.0, "reached", ""),
+            ("JIMACK", "", "", "sha", "", "", "fails to build: x"),
+        ],
+    )
+
+    def listed(**kwargs):
+        rows = _sampled(CutestTableSampler(table=path, **kwargs), tmp_path)
+        return [row["sif_params"] for row in rows]
+
+    assert listed(max_n=100) == ["N=100"]
+    assert listed(min_n=101, max_n=1000) == ["N=1000", "N=500"]
+    assert listed(min_n=1001) == ["N=5000"]
+    assert len(listed()) == 4
+    with pytest.raises(ValueError, match="no row with a value"):
+        listed(min_n=10_000)
+
+
+def test_shipped_task_set_is_the_n_up_to_100_part():
+    from importlib import resources
+
+    from omegaconf import OmegaConf
+
+    raw = OmegaConf.create(
+        resources.files("l2co_tasks.conf.tasks")
+        .joinpath("cutest.yaml")
+        .read_text()
+    )
+    assert raw.sampler.min_n is None
+    assert raw.sampler.max_n == 100
+
+
+def test_shipped_table_parses():
+    rows = _read_table(_TABLE_PATH)
+    for (problem, _), row in rows.items():
+        assert problem
+        assert row.excluded or row.global_min is not None
+
+
+def test_table_with_wrong_columns_is_refused(tmp_path):
+    path = tmp_path / "bad.csv"
+    path.write_text("problem,global_min\nROSENBR,0.0\n")
+    with pytest.raises(ValueError, match="expected"):
+        _read_table(path)
+
+
+def test_table_listing_a_size_twice_is_refused(tmp_path):
+    row = ("ROSENBR", "", 2, "abc", 0.0, "soltn", "")
+    path = _write_table(tmp_path / "dup.csv", [row, row])
+    with pytest.raises(ValueError, match="twice"):
+        _read_table(path)
+
+
+def test_size_that_never_built_may_have_no_n(table):
+    table([("JIMACK", "M=2,N=2", "", "sha", "", "", "fails to build: x")])
+    with pytest.raises(ValueError, match="fails to build"):
+        _table_global_min("JIMACK", "M=2,N=2", "sha", cutest_task._TABLE_PATH)
+
+
+def test_valued_row_without_n_is_refused(tmp_path):
+    row = ("ROSENBR", "", "", "sha", 0.0, "soltn", "")
+    path = _write_table(tmp_path / "no_n.csv", [row])
+    with pytest.raises(ValueError, match="only an excluded row"):
+        _read_table(path)
+
+
+def test_shipped_overrides_parse():
+    overrides = cutest_global_min_overrides()
+    assert overrides
+    for override in overrides.values():
+        assert (override.global_min is None) != (not override.excluded)
+        assert override.basis
+
+
+def test_shipped_overrides_agree_with_the_shipped_table():
+    """Every override is the committed row's value or exclusion (ADR 0006).
+
+    And every excluded row is an override, so a table run that applies the
+    overrides reproduces every exclusion.
+    """
+    table = _read_table(_TABLE_PATH)
+    overrides = cutest_global_min_overrides()
+    for key, override in overrides.items():
+        row = table[key]
+        assert row.sif_sha256 == override.sif_sha256, key
+        if override.excluded:
+            assert row.excluded == override.excluded, key
+        else:
+            assert row.global_min == override.global_min, key
+    excluded = {key for key, row in table.items() if row.excluded}
+    assert excluded <= {k for k, o in overrides.items() if o.excluded}
+
+
+@pytest.mark.parametrize(
+    ("row", "match"),
+    [
+        (("ROSENBR", "", "sha", 0.0, "unbounded", "formula"), "both"),
+        (("ROSENBR", "", "sha", "", "", "formula"), "neither"),
+        (("ROSENBR", "", "sha", 0.0, "", " "), "no basis"),
+        (("ROSENBR", "", "", 0.0, "", "formula"), "no sif_sha256"),
+        (("ROSENBR", "", "sha", "inf", "", "formula"), "non-finite"),
+    ],
+)
+def test_malformed_override_is_refused(tmp_path, row, match):
+    path = _write_overrides(tmp_path / "overrides.csv", [row])
+    with pytest.raises(ValueError, match=match):
+        cutest_global_min_overrides(path)
+
+
+def test_override_listing_a_size_twice_is_refused(tmp_path):
+    row = ("ROSENBR", "", "sha", 0.0, "", "formula")
+    path = _write_overrides(tmp_path / "overrides.csv", [row, row])
+    with pytest.raises(ValueError, match="twice"):
+        cutest_global_min_overrides(path)
+
+
+def test_overrides_with_wrong_columns_are_refused(tmp_path):
+    path = tmp_path / "overrides.csv"
+    path.write_text("problem,global_min\nROSENBR,0.0\n")
+    with pytest.raises(ValueError, match="expected"):
+        cutest_global_min_overrides(path)
+
+
+def test_table_row_is_looked_up_by_problem_and_size(table):
+    table(
+        [
+            ("EXTROSNB", "N=5", 5, "sha5", 0.0, "soltn", ""),
+            ("EXTROSNB", "N=10", 10, "sha10", 1.5, "estimate", ""),
+        ]
+    )
+    assert (
+        _table_global_min("EXTROSNB", "N=10", "sha10", cutest_task._TABLE_PATH)
+        == 1.5
+    )
+
+
+def test_problem_missing_from_table_is_refused(table):
+    table([])
+    with pytest.raises(ValueError, match="not in the global_min table"):
+        _table_global_min("ROSENBR", "", "sha", cutest_task._TABLE_PATH)
+
+
+def test_excluded_problem_is_refused_with_its_reason(table):
+    table([("INDEF", "N=10", 10, "sha", "", "", "unbounded below")])
+    with pytest.raises(ValueError, match="unbounded below"):
+        _table_global_min("INDEF", "N=10", "sha", cutest_task._TABLE_PATH)
+
+
+def test_changed_sif_file_is_refused(table):
+    table([("ROSENBR", "", 2, "old-sha", 0.0, "soltn", "")])
+    with pytest.raises(ValueError, match="has changed"):
+        _table_global_min("ROSENBR", "", "new-sha", cutest_task._TABLE_PATH)
+
+
+def test_opener_is_hashable_and_pickles():
+    opener = _CutestOpener("EXTROSNB", (("N", 10),))
+    assert opener == _CutestOpener("EXTROSNB", (("N", 10),))
+    assert hash(opener) == hash(_CutestOpener("EXTROSNB", (("N", 10),)))
+    assert opener != _CutestOpener("EXTROSNB", (("N", 5),))
+    assert cloudpickle.loads(cloudpickle.dumps(opener)) == opener
+
+
+def test_box_needs_its_own_global_min():
+    # A boxed task is not the unconstrained problem the table describes.
+    with pytest.raises(ValueError, match="global_min"):
+        create_cutest_task("BRKMCC", box=(1.05, 6.0))
+
+
+def test_missing_pycutest_explains_what_to_install(monkeypatch):
+    monkeypatch.setitem(sys.modules, "pycutest", None)
+    with pytest.raises(ImportError, match="CUTEst tasks need pycutest"):
+        create_cutest_task("ROSENBR", global_min=0.0)
+
+
+# Needs CUTEst ----------------------------------------------------------------
+
+
+@pytest.fixture
+def x64():
+    with jax.enable_x64(True):
+        yield
+
+
+@needs_cutest
+def test_rosenbr_starts_at_its_prescribed_point(x64):
+    task = create_cutest_task("ROSENBR", global_min=0.0)
+    np.testing.assert_array_equal(task.model, [-1.2, 1.0])
+    assert float(jax.jit(task.loss_fn)(task.model)) == pytest.approx(24.2)
+    np.testing.assert_allclose(
+        jax.grad(task.loss_fn)(task.model), [-215.6, -88.0], rtol=1e-12
+    )
+    assert task.global_min == 0.0
+    assert not task.pass_rng
+    assert task.dataset is None
+
+
+@needs_cutest
+def test_rosenbr_hessian_is_cutests(x64):
+    """jax.hessian reaches CUTEst's own second derivatives (ADR 0005)."""
+    task = create_cutest_task("ROSENBR", global_min=0.0)
+    np.testing.assert_allclose(
+        jax.hessian(task.loss_fn)(task.model),
+        [[1330.0, 480.0], [480.0, 200.0]],
+        rtol=1e-12,
+    )
+
+
+@needs_cutest
+def test_tag_is_flat_and_complete():
+    task = create_cutest_task("EXTROSNB", {"N": 5}, global_min=0.0)
+    assert task.tag["task_name"] == "cutest"
+    assert task.tag["fn_name"] == "EXTROSNB"
+    assert task.tag["dimensionality"] == task.dimensionality == 5
+    assert task.tag["noise"] == 0.0
+    assert task.tag["sif_params"] == "N=5"
+    assert len(task.tag["sif_sha256"]) == 64
+    assert task.tag["cutest_objective"] == "sum of squares"
+    assert task.tag["cutest_regular"] is True
+    assert not any(isinstance(v, dict) for v in task.tag.values())
+
+
+@needs_cutest
+def test_two_sizes_of_one_problem_are_different_tasks(x64):
+    small = create_cutest_task("EXTROSNB", {"N": 5}, global_min=0.0)
+    large = create_cutest_task("EXTROSNB", {"N": 10}, global_min=0.0)
+    assert small.dimensionality == 5
+    assert large.dimensionality == 10
+    assert small.hash != large.hash
+    assert np.isfinite(float(small.loss_fn(small.model)))
+    assert np.isfinite(float(large.loss_fn(large.model)))
+
+
+@needs_cutest
+def test_brkmcc_with_its_box(x64):
+    """BRKMCC is unbounded below; its box keeps it off the pole (ADR 0004)."""
+    task = create_cutest_task(
+        "BRKMCC", box=(1.05, 6.0), global_min=0.16904267919645
+    )
+    (box,) = task.constraints
+    assert isinstance(box, Box)
+    np.testing.assert_array_equal(box.lower, [1.05, 1.05])
+    np.testing.assert_array_equal(box.upper, [6.0, 6.0])
+    assert task.global_min == 0.16904267919645
+    plain = create_cutest_task("BRKMCC", global_min=0.16904267919645)
+    assert plain.constraints == ()
+    assert task.hash != plain.hash
+
+
+@needs_cutest
+def test_box_must_contain_the_prescribed_start():
+    with pytest.raises(ValueError):
+        create_cutest_task("BRKMCC", box=(-1.0, 1.0), global_min=0.0)
+
+
+@needs_cutest
+def test_hash_is_stable_across_builds():
+    first = create_cutest_task("ROSENBR", global_min=0.0)
+    second = create_cutest_task("ROSENBR", global_min=0.0)
+    assert first.hash == second.hash
+    assert first.loss_fn == second.loss_fn
+
+
+@needs_cutest
+@pytest.mark.parametrize(
+    ("problem", "kind"), [("ALLINIT", "bound"), ("HS21", "linear")]
+)
+def test_constrained_problem_is_refused(problem, kind):
+    with pytest.raises(ValueError, match=f"has {kind} constraints"):
+        create_cutest_task(problem, global_min=0.0)
+
+
+@needs_cutest
+def test_fixed_variables_are_dropped(x64):
+    """A class-X problem is unconstrained in its free variables (ADR 0006).
+
+    BIGGS3 is BIGGS6 with three of its six variables fixed.
+    """
+    task = create_cutest_task("BIGGS3", global_min=0.0)
+    assert task.dimensionality == 3
+    assert task.constraints == ()
+    value, grad = jax.value_and_grad(task.loss_fn)(task.model)
+    assert np.isfinite(float(value))
+    assert grad.shape == (3,)
+
+
+@needs_cutest
+def test_global_min_from_the_table(table):
+    sha = cutest_task._sif_sha256("ROSENBR")
+    table([("ROSENBR", "", 2, sha, 0.0, "soltn", "")])
+    assert create_cutest_task("ROSENBR").global_min == 0.0
+
+
+@needs_cutest
+def test_stale_table_row_is_refused(table):
+    table([("ROSENBR", "", 2, "0" * 64, 0.0, "soltn", "")])
+    with pytest.raises(ValueError, match="has changed"):
+        create_cutest_task("ROSENBR")
+
+
+@needs_cutest
+def test_non_finite_global_min_is_refused():
+    with pytest.raises(ValueError, match="finite"):
+        create_cutest_task("ROSENBR", global_min=float("nan"))
+
+
+@needs_cutest
+def test_save_load_round_trip(eqx_path, x64):
+    task = create_cutest_task("EXTROSNB", {"N": 5}, global_min=0.0)
+    loaded = Task.load(Task.save(task, str(eqx_path)))
+    assert loaded == task
+    assert loaded.hash == task.hash
+    np.testing.assert_array_equal(loaded.model, task.model)
+    assert float(loaded.loss_fn(loaded.model)) == float(
+        task.loss_fn(task.model)
+    )
+
+
+@needs_cutest
+def test_vmapped_loss_matches_a_loop(x64):
+    task = create_cutest_task("EXTROSNB", {"N": 5}, global_min=0.0)
+    xs = task.model + jax.random.normal(jax.random.key(0), (4, 5))
+    batched = jax.jit(jax.vmap(task.loss_fn))(xs)
+    looped = jnp.stack([task.loss_fn(x) for x in xs])
+    np.testing.assert_array_equal(batched, looped)
+
+
+@needs_cutest
+def test_global_min_from_a_given_table(tmp_path):
+    sha = cutest_task._sif_sha256("ROSENBR")
+    path = _write_table(
+        tmp_path / "provisional.csv",
+        [("ROSENBR", "", 2, sha, 0.125, "estimate", "")],
+    )
+    task = create_cutest_task("ROSENBR", "", table=path)
+    assert task.global_min == 0.125
+
+
+@needs_cutest
+def test_task_set_config_builds_every_listed_row(tmp_path):
+    """conf/tasks/cutest.yaml, pointed at a provisional table."""
+    from importlib import resources
+
+    from omegaconf import OmegaConf
+
+    from l2co_tasks import create_tasks_experimentdata
+
+    path = _write_table(
+        tmp_path / "provisional.csv",
+        [
+            (
+                problem,
+                params,
+                n,
+                cutest_task._sif_sha256(problem),
+                0.0,
+                "soltn",
+                "",
+            )
+            for problem, params, n in [
+                ("ROSENBR", "", 2),
+                ("EXTROSNB", "N=5", 5),
+            ]
+        ],
+    )
+    raw = OmegaConf.create(
+        resources.files("l2co_tasks.conf.tasks")
+        .joinpath("cutest.yaml")
+        .read_text()
+    )
+    cfg = OmegaConf.create({"seed": 0, "tasks": raw})
+    cfg.tasks.sampler.table = str(path)
+    ed = create_tasks_experimentdata(cfg.tasks, project_dir=tmp_path / "ed")
+    tasks = {
+        sample.output_data["task"].tag["fn_name"]: sample.output_data["task"]
+        for _, sample in ed
+    }
+    assert sorted(tasks) == ["EXTROSNB", "ROSENBR"]
+    assert tasks["EXTROSNB"].dimensionality == 5
+    assert tasks["EXTROSNB"].tag["sif_params"] == "N=5"

@@ -38,6 +38,13 @@ declares a ``Box`` is searched inside it, and a task with an inequality
 or equality constraint is refused, since this search can't respect
 one.
 
+Where the restarts start can be set by the caller with ``restart_sampler``
+(ADR 0004). A CUTEst task, whose model is the problem's prescribed start
+in the problem's own coordinates, restarts from that start and from
+points spread relative to it, where the optimizers will search, rather
+than from ``N(0, I)``. Without it, nothing changes: existing tasks keep
+their restarts, their estimates and their hashes.
+
 The floor-test battery (``tests/test_global_min_floor.py``) is the oracle
 for whether the resulting value is genuinely a floor; estimator strength
 (restarts / steps, per task) is tuned until that test holds.
@@ -52,6 +59,8 @@ downstream databank keys) between rebuilds.
 # Standard
 from __future__ import annotations
 
+from collections.abc import Callable
+
 # Third-party
 import equinox as eqx
 import jax
@@ -59,6 +68,7 @@ import jax.numpy as jnp
 import jax.random as jr
 import jax.tree_util as jtu
 import optax
+from jaxtyping import PyTree
 
 # Local
 from .constraints import Box
@@ -72,6 +82,15 @@ from .task import Task
 # within this many steps, so even a small-``n_steps`` build still gets a
 # converged (floor-respecting) L-BFGS estimate.
 _LBFGS_DEFAULT_STEPS = 300
+
+# Folded into the seed's key to draw ``restart_sampler``'s starts. Using a
+# separate key, rather than another split, leaves the per-restart keys,
+# and so every estimate made without a ``restart_sampler``, unchanged.
+_RESTART_SAMPLER_FOLD = 1_000_003
+
+#: ``sampler(key, params, n_samples) -> params`` with a leading
+#: ``n_samples`` axis: the signature of the ``l2co.sampling`` samplers.
+RestartSampler = Callable[[jax.Array, PyTree, int], PyTree]
 
 
 def _finite(loss: jax.Array) -> jax.Array:
@@ -125,6 +144,52 @@ def _resample_leaves(model, key: jax.Array, box: Box | None):
     return eqx.combine(jtu.tree_unflatten(treedef, new), static)
 
 
+def _sampled_starts(
+    model: PyTree,
+    restart_sampler: RestartSampler,
+    key: jax.Array,
+    n_restarts: int,
+    box: Box | None,
+) -> list[PyTree]:
+    """One start per restart, drawn by ``restart_sampler`` in one call.
+
+    The sampler gets the model's trainable parameters and ``n_restarts``;
+    restart ``r`` starts from its ``r``-th draw, clipped into ``box`` if
+    the task has one.
+
+    Raises
+    ------
+    ValueError
+        If the draws don't have the parameters' structure, each leaf with
+        a leading axis of length ``n_restarts``.
+    """
+    params, static = eqx.partition(model, eqx.is_inexact_array)
+    draws = restart_sampler(key, params, n_restarts)
+    p_leaves, p_def = jtu.tree_flatten(params)
+    d_leaves, d_def = jtu.tree_flatten(draws)
+    expected = [(n_restarts, *jnp.shape(x)) for x in p_leaves]
+    if d_def != p_def or [jnp.shape(d) for d in d_leaves] != expected:
+        raise ValueError(
+            "restart_sampler must return the parameters' structure with a "
+            f"leading axis of {n_restarts} (one start per restart); got "
+            f"leaf shapes {[jnp.shape(d) for d in d_leaves]}, expected "
+            f"{expected}"
+        )
+    starts = []
+    for r in range(n_restarts):
+        start = jtu.tree_unflatten(
+            p_def,
+            [
+                jnp.asarray(d[r], dtype=jnp.asarray(x).dtype)
+                for d, x in zip(d_leaves, p_leaves, strict=True)
+            ],
+        )
+        if box is not None:
+            start = jtu.tree_map(jnp.clip, start, box.lower, box.upper)
+        starts.append(eqx.combine(start, static))
+    return starts
+
+
 def _search_box(task: Task) -> Box | None:
     """The box to search ``task`` in, or ``None`` if it has none.
 
@@ -163,6 +228,7 @@ def estimate_global_min(
     lr: float = 1e-2,
     use_lbfgs: bool = True,
     lbfgs_steps: int | None = None,
+    restart_sampler: RestartSampler | None = None,
 ) -> float:
     """Estimate a task's global minimum with benchmark optimisers.
 
@@ -189,6 +255,12 @@ def estimate_global_min(
     resampled restarts approximate a global search of the
     (low-dimensional) box. The box is the task's own: there is no
     separate flag for it (``docs/adr/0002``).
+
+    A ``restart_sampler`` replaces all of that: every restart, the first
+    included, starts from one of its draws. With l2co's
+    ``relative_normal`` sampler, whose first draw is the parameters
+    themselves, the first restart starts from ``task.model`` and the
+    others from points spread relative to it (ADR 0004).
 
     Parameters
     ----------
@@ -217,6 +289,14 @@ def estimate_global_min(
         Adam breadth budget ``n_steps``) when ``None``. On these smooth
         losses L-BFGS converges well within that many steps, so even a
         small-``n_steps`` build still gets a floor-respecting estimate.
+    restart_sampler : RestartSampler or None, optional
+        Where the restarts start: ``restart_sampler(key, params,
+        n_restarts)`` with ``params`` the model's trainable parameters,
+        returning them with a leading axis of ``n_restarts`` -- the
+        signature of the ``l2co.sampling`` samplers. Restart ``r`` starts
+        from draw ``r``, clipped into the task's box if it has one. The
+        key is derived from ``seed``, so the estimate stays deterministic.
+        ``None`` (the default) keeps the restarts described above.
 
     Returns
     -------
@@ -226,8 +306,9 @@ def estimate_global_min(
     Raises
     ------
     ValueError
-        If the task has an inequality or equality constraint, or a box
-        with an infinite bound.
+        If the task has an inequality or equality constraint, a box with
+        an infinite bound, or a ``restart_sampler`` whose draws don't
+        match the parameters.
     """
     box = _search_box(task)
     n_steps = max(int(n_steps), 1)
@@ -245,6 +326,17 @@ def estimate_global_min(
     dataset = {k: jnp.asarray(v) for k, v in task.loaded_dataset.items()}
     key = jr.key(int(seed))
     restart_keys = jr.split(key, n_restarts)
+    sampled = (
+        None
+        if restart_sampler is None
+        else _sampled_starts(
+            task.model,
+            restart_sampler,
+            jr.fold_in(key, _RESTART_SAMPLER_FOLD),
+            n_restarts,
+            box,
+        )
+    )
     opt = optax.adam(optax.cosine_decay_schedule(lr, n_steps))
 
     def loss_at(params, static, step_key):
@@ -318,7 +410,9 @@ def estimate_global_min(
     best_overall = jnp.asarray(jnp.inf)
     for r in range(n_restarts):
         rk = restart_keys[r]
-        if r == 0 and box is None:
+        if sampled is not None:
+            start = sampled[r]
+        elif r == 0 and box is None:
             start = task.model
         else:
             start = _resample_leaves(task.model, rk, box)

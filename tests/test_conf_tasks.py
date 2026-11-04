@@ -29,7 +29,8 @@ from l2co_tasks import Task, create_tasks_experimentdata
 
 # Configs whose data generator needs the BBOB-noisy suite, which ships
 # with bbob-jax releases newer than 1.8.0; on older installs they skip.
-# The balanced composites include a bbob_noisy ``parts`` entry.
+# The balanced and joint-selection composites include a bbob_noisy
+# ``parts`` entry.
 _NEEDS_BBOB_NOISY = {
     "bbob_noisy",
     "bbob_balanced_train",
@@ -37,6 +38,8 @@ _NEEDS_BBOB_NOISY = {
     "bbob_headroom_train",
     "bbob_headroom_test",
     "bbob_headroom_toy",
+    "joint_selection_train",
+    "joint_selection_test",
 }
 _HAS_BBOB_NOISY = hasattr(bbob_jax, "bbob_noisy_registry")
 
@@ -312,7 +315,28 @@ _SLOW = {
     # identity sampler admits no shrinking overlay).
     "bbob_balanced_train",
     "bbob_balanced_test",
+    # 100-task joint-selection composites, likewise in full.
+    "joint_selection_train",
+    "joint_selection_test",
 }
+
+
+def _cutest_ready() -> str | None:
+    """Why the ``cutest`` task set can't be built here, or ``None``.
+
+    It needs pycutest with a CUTEst installation, and a committed
+    ``global_min`` table with at least one valued row (ADR 0004); the table
+    stays empty until the cutest_global_min_table experiment fills it.
+    """
+    try:
+        import pycutest  # noqa: F401
+    except (ImportError, RuntimeError):
+        return "needs pycutest and a CUTEst installation"
+    from l2co_tasks._src.cutest_task import _TABLE_PATH, _read_table
+
+    if not any(not row.excluded for row in _read_table(_TABLE_PATH).values()):
+        return "the committed CUTEst global_min table has no valued rows yet"
+    return None
 
 
 def _shipped_yaml_names() -> list[str]:
@@ -374,6 +398,8 @@ def test_sample_task_distribution(
         pytest.skip("installed bbob-jax predates the BBOB-noisy suite")
     if config_name in _NEEDS_LSGO and not _HAS_LSGO:
         pytest.skip("installed bbob-jax predates the CEC 2013 LSGO suite")
+    if config_name == "cutest" and (reason := _cutest_ready()) is not None:
+        pytest.skip(reason)
 
     # mnist1d, spirals, gaussian_classification ship relative
     # ``task_kwargs.dataset_path`` strings; PDETaskSampler likewise

@@ -43,6 +43,13 @@ short benchmark optimiser* at task-creation time (`estimate_global_min`,
 currently short multi-restart Adam) — gaussian classification, spiral,
 MNIST-1D, the Adam-meta task. An estimate, **not** a guaranteed floor.
 
+**Recorded optimum** (`SOLTN`):
+The optimal value a CUTEst problem's SIF file states in a comment. The
+weakest evidence for a `global_min`: often rounded, copied from another
+problem or size, or a local optimum, so it counts only where a run
+reaches it (ADR 0006).
+_Avoid_: known optimum, published optimum.
+
 **Production portfolio**:
 The per-family set of optimizers the real L2CO study actually runs,
 defined in `l2co_experiments/conf/optimizers/` (`medium` for
@@ -124,3 +131,30 @@ The non-negative amount by which a point misses a constraint beyond its
 feasibility tolerance. It is zero exactly where the constraint is
 satisfied.
 _Avoid_: infeasibility, constraint error.
+
+### Host objectives
+
+**Host objective**:
+A task's objective computed outside JAX, such as compiled Fortran or a
+simulator, which optimizers see only through an ordinary `loss_fn`
+(ADR 0003). A task built on one is a **host task**.
+_Avoid_: external loss, non-JAX task, black box (every task is a black
+box to a gradient-free optimizer).
+
+**Prescribed start**:
+The starting point a problem's source defines as part of the problem,
+such as CUTEst's `x0`. A task with one keeps it as its model, in the
+problem's own coordinates (ADR 0004).
+_Avoid_: initial guess.
+
+### Benchmark structure
+
+**Base landscape**:
+The landscape a benchmark function is a version of: functions that
+evaluate the same defining formula and differ only by shift, rotation,
+the size of an existing conditioning, BBOB's oscillation and asymmetry
+maps, a generator parameter, noise or embedding share one (ADR 0007).
+A function-disjoint split assigns whole base landscapes to one side.
+Looked up by `fn_name` with `base_landscape`.
+_Avoid_: function family (fuzzy at the edges), base function (reads as
+one BBOB function, while a base landscape spans suites).

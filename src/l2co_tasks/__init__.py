@@ -6,6 +6,7 @@ L2CO Tasks - Optimization tasks compatible with the L2CO library
 # =============================================================================
 
 # Local
+from ._src.base_landscape import base_landscape, base_landscapes
 from ._src.benchmark_task import (
     CEC2019Sampler,
     create_bbob_noisy_task,
@@ -16,12 +17,20 @@ from ._src.benchmark_task import (
 )
 from ._src.constraints import Box, Constraint, Equality, Inequality
 from ._src.continue_from_path import retrieve_tasks
+from ._src.cutest_sif import cutest_sizes, cutest_soltn
+from ._src.cutest_task import (
+    CutestOverride,
+    CutestTableSampler,
+    create_cutest_task,
+    cutest_global_min_overrides,
+)
 from ._src.embedded_task import create_embedded_bbob_task
 from ._src.euler import EulerTaskSampler, create_euler_task
 from ._src.experimentdata import create_tasks_experimentdata
 from ._src.gaussian_meta import create_gaussian_meta_task
 from ._src.global_min import estimate_global_min
 from ._src.helmholtz import HelmholtzTaskSampler, create_helmholtz_task
+from ._src.host_objective import HostLoss, HostObjective, host_loss
 from ._src.inviscid_burgers import (
     InviscidBurgersTaskSampler,
     create_inviscid_burgers_task,
@@ -51,10 +60,14 @@ __all__ = [
     "Box",
     "CEC2019Sampler",
     "Constraint",
+    "CutestOverride",
+    "CutestTableSampler",
     "DatasetDict",
     "Equality",
     "EulerTaskSampler",
     "HelmholtzTaskSampler",
+    "HostLoss",
+    "HostObjective",
     "Inequality",
     "InviscidBurgersTaskSampler",
     "PDETaskSampler",
@@ -62,11 +75,17 @@ __all__ = [
     "StokesTaskSampler",
     "Task",
     "ViscousBurgersTaskSampler",
+    "base_landscape",
+    "base_landscapes",
     "create_bbob_noisy_task",
     "create_bbob_task",
     "create_cec2005_task",
     "create_cec2013lsgo_task",
     "create_cec2017_task",
+    "create_cutest_task",
+    "cutest_global_min_overrides",
+    "cutest_sizes",
+    "cutest_soltn",
     "create_embedded_bbob_task",
     "create_euler_task",
     "create_gaussian_meta_task",
@@ -82,5 +101,6 @@ __all__ = [
     "create_tasks_experimentdata",
     "create_viscous_burgers_task",
     "estimate_global_min",
+    "host_loss",
     "retrieve_tasks",
 ]
