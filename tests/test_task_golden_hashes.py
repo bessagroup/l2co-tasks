@@ -16,6 +16,14 @@ pin three layers:
 * a ``.eqx`` file written by the pre-constraints code.
 
 Do not update a value here unless re-keying the databank is intended.
+
+Re-keyed once, on purpose, for the dataset paper's protocol revision
+(Section 5 item 10, 2026-11-05): ``tag["noise"]`` became a bool that
+says whether the loss is stochastic, instead of the added-noise level.
+That changed every benchmark value below that carried ``noise: 0.0`` or
+``0.1`` (old values in the comments); bbob-noisy already carried
+``True`` and quadratic carries no ``noise`` key, so those two kept
+theirs. The ``global_min`` part of each hash is unchanged.
 """
 
 from __future__ import annotations
@@ -102,21 +110,21 @@ FACTORY = [
         lambda: create_bbob_task(
             fn_name="sphere", seed=0, dimensionality=3, noise=0.0
         ),
-        "13d7d4ff60a64f7f",
+        "5bd6dce2605aeeff",  # was 13d7d4ff60a64f7f (noise 0.0)
         id="bbob-sphere",
     ),
     pytest.param(
         lambda: create_bbob_task(
             fn_name="rastrigin", seed=0, dimensionality=3, noise=0.0
         ),
-        "367e1bd1199584dc",
+        "5cdda7a083965527",  # was 367e1bd1199584dc (noise 0.0)
         id="bbob-rastrigin",
     ),
     pytest.param(
         lambda: create_bbob_task(
             fn_name="sphere", seed=0, dimensionality=3, noise=0.1
         ),
-        "0cd204bc360894e1",
+        "4559d4190c9b5511",  # was 0cd204bc360894e1 (noise 0.1)
         id="bbob-sphere-noisy",
     ),
     pytest.param(
@@ -129,14 +137,21 @@ FACTORY = [
     ),
     pytest.param(
         lambda: create_cec2005_task(fn_name="f1", seed=0, dimensionality=3),
-        "dfbdf20255a3263f",
+        "3b1c84f96f4b83af",  # was dfbdf20255a3263f (noise 0.0)
         id="cec2005-f1",
+    ),
+    pytest.param(
+        lambda: create_cec2005_task(fn_name="f4", seed=0, dimensionality=3),
+        # Noisy by itself; tagged noise 0.0 (hash 0f6057f965f6135c)
+        # before the revision.
+        "718e9e272b2e9880",
+        id="cec2005-f4",
     ),
     pytest.param(
         lambda: create_cec2017_task(
             fn_name="cec2017_f1", seed=0, dimensionality=3
         ),
-        "7291d184e56719ec",
+        "4676ee91d04a3a4d",  # was 7291d184e56719ec (noise 0.0)
         id="cec2017-f1",
     ),
     pytest.param(
@@ -160,6 +175,7 @@ def test_pre_constraints_file_loads_unchanged():
     with jax.enable_x64(True):
         task = Task.load(FIXTURE)
     assert task.constraints == ()
+    assert task.loss_fn_true is None
     assert task.hash == "32a8ec64a8595ee7"
     with open(FIXTURE, "rb") as f:
         stored = json.loads(f.readline().decode())

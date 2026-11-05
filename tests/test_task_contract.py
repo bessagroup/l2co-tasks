@@ -298,3 +298,62 @@ def test_nan_input_does_not_raise(tc):
     assert jitted.shape == ()
     assert jitted.dtype == ref.dtype
     # Value is intentionally unconstrained: NaN is acceptable.
+
+
+# ---------------------------------------------------------------------------
+# H. Noise tag and noise-free loss
+# ---------------------------------------------------------------------------
+
+
+def test_noise_tag_matches_pass_rng_and_noise_free_loss(tc):
+    """A noise-free loss implies ``pass_rng``; where a ``noise`` tag
+    exists it is a bool equal to both."""
+    task = tc.task
+    if task.loss_fn_true is not None:
+        assert task.pass_rng is True
+    if "noise" in task.tag:
+        assert type(task.tag["noise"]) is bool
+        assert task.tag["noise"] is task.pass_rng
+        assert task.tag["noise"] is (task.loss_fn_true is not None)
+
+
+def test_noise_free_loss_transforms_and_lower_bound(tc):
+    """The noise-free loss takes no key, works under jit, vmap and grad,
+    and never dips below ``global_min``, although the noisy loss may."""
+    task = tc.task
+    if task.loss_fn_true is None:
+        pytest.skip("task has no noise-free loss")
+    keys = jr.split(jr.key(21), BATCH)
+    models = [sample_model(task, k, tc.case.domain) for k in keys]
+    f = task.loss_fn_true
+
+    looped = jnp.stack([f(m) for m in models])
+    assert jnp.all(jnp.isfinite(looped))
+    jitted = jnp.stack([eqx.filter_jit(f)(m) for m in models])
+    assert jnp.allclose(jitted, looped, rtol=RTOL, atol=ATOL)
+    batched = eqx.filter_vmap(f)(stack_models(models))
+    assert jnp.allclose(batched, looped, rtol=RTOL, atol=ATOL)
+    grad = eqx.filter_grad(f)(models[0])
+    leaves = jtu.tree_leaves(eqx.filter(grad, eqx.is_inexact_array))
+    assert all(jnp.all(jnp.isfinite(g)) for g in leaves)
+
+    if task.global_min is not None:
+        tol = ATOL + RTOL * abs(task.global_min)
+        assert jnp.all(looped >= task.global_min - tol)
+
+
+def test_save_load_round_trip_preserves_noise_free_loss(tc, tmp_path):
+    """``Task.save`` then ``Task.load`` keeps the noise-free loss, or its
+    absence."""
+    task = tc.task
+    loaded = Task.load(Task.save(task, str(tmp_path / "task")))
+    if task.loss_fn_true is None:
+        assert loaded.loss_fn_true is None
+        return
+    model = sample_model(task, jr.key(22), tc.case.domain)
+    assert jnp.allclose(
+        loaded.loss_fn_true(model),
+        task.loss_fn_true(model),
+        rtol=RTOL,
+        atol=ATOL,
+    )

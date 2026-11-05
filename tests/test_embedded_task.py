@@ -51,7 +51,7 @@ def test_create_embedded_bbob_task(fn_name, bulk_scale, eqx_path):
     assert task.pass_rng is False
     assert task.tag["fn_name"] == fn_name
     assert task.tag["seed"] == 0
-    assert task.tag["noise"] == 0.0
+    assert task.tag["noise"] is False
     assert task.tag["dimensionality"] == 12
     assert task.tag["intrinsic_dimensionality"] == 3
     assert task.tag["bulk_scale"] == bulk_scale
@@ -166,6 +166,7 @@ def test_noise_flips_pass_rng():
         noise=0.1,
     )
     assert task.pass_rng is True
+    assert task.tag["noise"] is True
     l1 = float(task.loss_fn(jnp.ones(8) * 0.2, jr.key(0)))
     l2 = float(task.loss_fn(jnp.ones(8) * 0.2, jr.key(1)))
     assert jnp.isfinite(l1) and jnp.isfinite(l2)

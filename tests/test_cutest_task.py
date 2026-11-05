@@ -358,7 +358,7 @@ def test_tag_is_flat_and_complete():
     assert task.tag["task_name"] == "cutest"
     assert task.tag["fn_name"] == "EXTROSNB"
     assert task.tag["dimensionality"] == task.dimensionality == 5
-    assert task.tag["noise"] == 0.0
+    assert task.tag["noise"] is False
     assert task.tag["sif_params"] == "N=5"
     assert len(task.tag["sif_sha256"]) == 64
     assert task.tag["cutest_objective"] == "sum of squares"

@@ -58,7 +58,7 @@ def test_create_bbob_task_noiseless(fn_name, dimensionality, eqx_path):
     assert task.pass_rng is False
     assert task.tag["fn_name"] == fn_name
     assert task.tag["seed"] == 0
-    assert task.tag["noise"] == 0.0
+    assert task.tag["noise"] is False
     assert task.tag["dimensionality"] == dimensionality
 
     loss = float(task.loss_fn(task.model))
@@ -77,6 +77,7 @@ def test_create_bbob_task_with_noise_requires_key():
         fn_name="sphere", seed=0, dimensionality=3, noise=0.1
     )
     assert task.pass_rng is True
+    assert task.tag["noise"] is True
 
     l1 = float(task.loss_fn(task.model, jr.key(0)))
     l2 = float(task.loss_fn(task.model, jr.key(1)))
@@ -158,7 +159,7 @@ def test_create_cec2013lsgo_task(fn_name, eqx_path):
     assert task.pass_rng is False
     assert task.tag["fn_name"] == fn_name
     assert task.tag["seed"] == 0
-    assert task.tag["noise"] == 0.0
+    assert task.tag["noise"] is False
     assert task.tag["dimensionality"] == ndim
     # For a fixed-instance suite min_ndim *is* the native dimension.
     assert task.tag["min_ndim"] == ndim
@@ -223,6 +224,8 @@ def test_create_cec2013lsgo_task_with_noise_requires_key():
         fn_name="cec2013lsgo_f3", seed=0, dimensionality=1000, noise=0.1
     )
     assert task.pass_rng is True
+    assert task.tag["noise"] is True
+    assert task.loss_fn_true is not None
     x = jnp.full(1000, 0.3)
     l1 = float(task.loss_fn(x, jr.key(0)))
     l2 = float(task.loss_fn(x, jr.key(1)))
@@ -247,20 +250,20 @@ def test_create_cec2013lsgo_task_old_bbob_jax_raises(monkeypatch):
         )
 
 
-@pytest.mark.parametrize("fn_name", ["f1", "f4"])
+@pytest.mark.parametrize("fn_name", ["f1", "f4", "f17", "f24", "f25"])
 def test_create_cec2005_task(fn_name):
     """CEC2005: ``f1`` deterministic (noise=0 ⇒ pass_rng False);
-    ``f4`` is inherently stochastic and forces ``pass_rng=True``."""
+    ``f4``, ``f17``, ``f24`` and ``f25`` are inherently stochastic, so
+    they are tagged noisy and set ``pass_rng=True``."""
     task = create_cec2005_task(
         fn_name=fn_name, seed=0, dimensionality=3, noise=0.0
     )
     assert isinstance(task, Task)
     assert task.dimensionality == 3
     assert task.tag["fn_name"] == fn_name
-    if fn_name in {"f4", "f17", "f24", "f25"}:
-        assert task.pass_rng is True
-    else:
-        assert task.pass_rng is False
+    noisy = fn_name in {"f4", "f17", "f24", "f25"}
+    assert task.pass_rng is noisy
+    assert task.tag["noise"] is noisy
 
 
 @pytest.mark.parametrize(
@@ -303,6 +306,7 @@ def test_create_cec2017_task_noise_flips_pass_rng():
         fn_name="cec2017_f1", seed=0, dimensionality=3, noise=0.1
     )
     assert task.pass_rng is True
+    assert task.tag["noise"] is True
     l1 = float(task.loss_fn(jnp.ones(3) * 0.2, jr.key(0)))
     l2 = float(task.loss_fn(jnp.ones(3) * 0.2, jr.key(1)))
     assert jnp.isfinite(l1) and jnp.isfinite(l2)

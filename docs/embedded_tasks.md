@@ -47,7 +47,7 @@ loss = task.loss_fn(task.model)   # model is a 256-vector in [0, 1]^256
 | `intrinsic_dim` (`d`) | How many dimensions actually matter. The real difficulty. |
 | `ambient_dim` (`D`) | How many dimensions the optimizer sees. The camouflage. Must be `>= d`. |
 | `bulk_scale` | How steeply the "useless" directions tilt. See below. |
-| `noise` | Optional multiplicative Gaussian noise on the total loss. |
+| `noise` | Optional multiplicative Gaussian noise on the total loss. The task is then tagged `noise: True` (the level itself is not tagged) and keeps the loss without noise in `loss_fn_true`. |
 
 `bulk_scale` is the interesting optional one. Leave it at `0.0` and the useless directions
 are *perfectly* flat, so there is a whole flat valley of equally-good answers. Set it to
