@@ -158,7 +158,8 @@ schema:
   separable: boolean
   unimodal: boolean
   # Derived (l2co.features.DERIVED_FEATURES) from the `noise` tag rather
-  # than stored in it, so every task hash -- and every databank taskID --
-  # is unchanged and no trajectory is re-run. False for exactly the 25
+  # than stored in it, so it adds no tag key. (The bool `noise` tag of the
+  # dataset protocol revision re-keys the bbob and embedded tasks here
+  # anyway; the bbob_noisy ones keep their hashes.) False for exactly the 25
   # bbob_noisy tasks of this half, True for the 25 bbob + 50 embedded.
   deterministic: boolean

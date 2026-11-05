@@ -449,7 +449,7 @@ def create_cutest_task(
         is a host loss over the compiled problem. ``pass_rng`` is
         ``False`` and there is no dataset. The tag holds ``task_name``
         (``"cutest"``), ``fn_name`` (the problem), ``dimensionality``,
-        ``noise`` (``0.0``), ``sif_params`` (canonical string),
+        ``noise`` (``False``), ``sif_params`` (canonical string),
         ``sif_sha256`` and the classification fields
         ``cutest_objective``, ``cutest_regular``, ``cutest_degree``,
         ``cutest_origin`` and ``cutest_internal``.
@@ -512,7 +512,7 @@ def create_cutest_task(
         "task_name": "cutest",
         "fn_name": problem,
         "dimensionality": int(compiled.n),
-        "noise": 0.0,
+        "noise": False,
         "sif_params": params_str,
         "sif_sha256": sif_sha256,
         "cutest_objective": properties["objective"],

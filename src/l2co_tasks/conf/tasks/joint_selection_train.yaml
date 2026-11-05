@@ -185,8 +185,11 @@ schema:
   # composition, hybrid, rotated) are left out: encoding them for a mixed
   # set needs tolerate_missing, whose missingness pattern is close to a
   # suite identifier (l2co.task_features). `deterministic` is derived from
-  # the `noise` tag (l2co.features.DERIVED_FEATURES), so no task hash
-  # changes: false for exactly the bbob_noisy tasks.
+  # the `noise` tag (l2co.features.DERIVED_FEATURES), so it adds no tag
+  # key. (The bool `noise` tag of the dataset protocol revision re-keys
+  # every task here but the bbob_noisy ones anyway.) False for exactly the
+  # noisy tasks: bbob_noisy, and CEC 2005 f4/f17/f24/f25, tagged noisy
+  # since the noise tag became a bool.
   dimensionality: continuous
   unimodal: boolean
   deterministic: boolean

@@ -49,8 +49,9 @@
 # shift/rotation parameters from the key, so `seed` genuinely selects an
 # instance. Four seeds are listed, matching bbob.yaml and cec2005.yaml;
 # seed 0 is the single instance the suite shipped with before it was
-# widened, so its task hashes are unchanged. Rollout repeats stay a
-# separate axis (`n_realizations`).
+# widened, so the widening left its task hashes unchanged (the bool
+# `noise` tag of the dataset protocol revision re-keys every task here
+# anyway). Rollout repeats stay a separate axis (`n_realizations`).
 sampler:
   _target_: f3dasm.create_sampler
   sampler: "grid"
