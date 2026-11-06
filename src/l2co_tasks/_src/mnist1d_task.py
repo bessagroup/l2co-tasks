@@ -113,6 +113,8 @@ def create_mnist1d_task(
 
     tag = {"task_name": "mnist1d"}
     tag["seed"] = seed
+    tag["dataset_size"] = dataset_size
+    tag["batch_size"] = batch_size
 
     if not Path(dataset_path).with_suffix(".npz").exists():
         dataset = mnist1d_dataset(dataset_size=dataset_size, seed=seed)

@@ -176,7 +176,8 @@ def test_rebuilding_keeps_the_box():
     np.testing.assert_array_equal(
         again.constraints[0].lower, task.constraints[0].lower
     )
-    assert again.hash != task.hash  # global_min changed, nothing else
+    # global_min changed, nothing else: same task (ADR 0008)
+    assert again.hash == task.hash
 
 
 # ---------------------------------------------- building a Task: rejections

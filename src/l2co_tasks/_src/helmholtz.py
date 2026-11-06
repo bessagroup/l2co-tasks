@@ -32,7 +32,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from copy import deepcopy
 from functools import partial
-from pathlib import Path
 
 # Third-party
 import jax
@@ -42,7 +41,7 @@ from f3dasm import Block, ExperimentData
 from jaxtyping import Array, PyTree
 
 # Local
-from ._io import save_dataset
+from ._io import ensure_points_dataset, points_cache_path
 from .experimentdata import build_task_experimentdata
 from .models import fourier_mlp
 from .pde import mse
@@ -186,7 +185,6 @@ def create_helmholtz_task(
     if dim not in (2, 3):
         raise ValueError(f"dim must be 2 or 3, got {dim}")
 
-    _path = Path(dataset_path + f"_{seed}").with_suffix(".npz")
     key = jr.key(int(seed))
     model_key, dataset_key = jr.split(key)
 
@@ -222,17 +220,24 @@ def create_helmholtz_task(
         "k": k,
         "modes": tuple(int(m) for m in modes),
         "dimensionality": num_params,
+        "seed": int(seed),
+        "num_res_points": int(num_res_points),
+        "x_range": tuple(float(v) for v in x_range),
     }
     tag.update(model_tags)
 
-    if not _path.exists():
-        dataset = create_points_dataset(
+    # The file is named by the tag, so other point arguments never
+    # reuse this task's points (ADR 0008).
+    _path = points_cache_path(dataset_path, tag)
+    ensure_points_dataset(
+        _path,
+        lambda: create_points_dataset(
             x_range=x_range,
             dim=dim,
             num_res_points=num_res_points,
             key=dataset_key,
-        )
-        save_dataset(dataset, _path)
+        ),
+    )
 
     return Task(
         model=model,

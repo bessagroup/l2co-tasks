@@ -11,9 +11,16 @@ optimizers behave on it.
 **Global minimum** (`global_min`):
 The reference loss value recorded on every `Task`, against which an
 optimizer's progress is measured. Not merely informational — it is
-subtracted from trajectories downstream (see **Quality value**) and is
-part of the task's identity (`tag_hashable`, `hash`). For a constrained
-task it is the minimum over the **feasible** region.
+subtracted from trajectories downstream (see **Quality value**). It is
+**not** part of the task's identity (ADR 0008): an estimated minimum can
+be corrected without changing which task it is. For a constrained task
+it is the minimum over the **feasible** region.
+
+**Task identity** (`hash`, `tag_hashable`):
+What makes two tasks the same task: the tag plus the constraints (the
+latter only when present). The databank keys every result by `hash`.
+Every factory argument that changes the task belongs in the tag;
+arguments that only set `global_min` stay out (ADR 0008).
 
 **Quality value**:
 A trajectory's loss shifted into `loss − global_min` space, where the

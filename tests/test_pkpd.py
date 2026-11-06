@@ -88,3 +88,33 @@ def test_loss_and_round_trip(tmp_path):
     assert loaded.hash == task.hash
     after = float(loaded.loss_fn(loaded.model, **loaded.loaded_dataset))
     assert after == pytest.approx(before, rel=1e-5)
+
+
+_PKPD_ARGS = dict(
+    seed=0,
+    point_allocation=((0.0, 1.9, 8), (1.9, 4.0, 8), (4.0, 17.0, 8)),
+    hidden_size=4,
+    num_layers=2,
+)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    "changed",
+    [
+        {"seed": 1},
+        {"point_allocation": ((0.0, 1.9, 9), (1.9, 4.0, 8), (4.0, 17.0, 8))},
+        {"point_allocation": ((0.0, 2.0, 8), (2.0, 4.0, 8), (4.0, 17.0, 8))},
+    ],
+)
+def test_pkpd_hash_follows_every_argument_that_changes_the_task(
+    tmp_path, changed
+):
+    """Same arguments, same task; one changed argument, another task."""
+    base = create_pkpd_task(dataset_path=str(tmp_path / "a"), **_PKPD_ARGS)
+    again = create_pkpd_task(dataset_path=str(tmp_path / "b"), **_PKPD_ARGS)
+    other = create_pkpd_task(
+        dataset_path=str(tmp_path / "c"), **{**_PKPD_ARGS, **changed}
+    )
+    assert base.hash == again.hash
+    assert base.hash != other.hash

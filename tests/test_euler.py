@@ -66,3 +66,43 @@ def test_loss_and_round_trip(tmp_path, stage):
     assert loaded.hash == task.hash
     after = float(loaded.loss_fn(loaded.model, **loaded.loaded_dataset))
     assert after == pytest.approx(before, rel=1e-5)
+
+
+_EULER_ARGS = dict(
+    seed=0,
+    stage="inviscid",
+    num_res_points=16,
+    num_ic_points=8,
+    num_bc_points=8,
+    hidden_size=4,
+    num_layers=2,
+)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    "changed",
+    [
+        {"seed": 1},
+        {"num_res_points": 17},
+        {"num_ic_points": 9},
+        {"num_bc_points": 9},
+        {"x_range": (-2.0, 2.0)},
+        {"t_range": (0.0, 2.0)},
+        {"lam_ic": 2.0},
+        {"lam_bc": 2.0},
+        {"lam_f": 2.0},
+        {"lam_nu": 2.0},
+    ],
+)
+def test_euler_hash_follows_every_argument_that_changes_the_task(
+    tmp_path, changed
+):
+    """Same arguments, same task; one changed argument, another task."""
+    base = create_euler_task(dataset_path=str(tmp_path / "a"), **_EULER_ARGS)
+    again = create_euler_task(dataset_path=str(tmp_path / "b"), **_EULER_ARGS)
+    other = create_euler_task(
+        dataset_path=str(tmp_path / "c"), **{**_EULER_ARGS, **changed}
+    )
+    assert base.hash == again.hash
+    assert base.hash != other.hash

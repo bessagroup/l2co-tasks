@@ -39,7 +39,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from functools import partial
-from pathlib import Path
 
 # Third-party
 import equinox as eqx
@@ -50,7 +49,7 @@ from f3dasm import Block, ExperimentData
 from jaxtyping import Array, PyTree
 
 # Local
-from ._io import save_dataset
+from ._io import ensure_points_dataset, points_cache_path
 from .experimentdata import build_task_experimentdata
 from .models import mlp
 from .pde import mse
@@ -463,7 +462,6 @@ def create_euler_task(
     if stage not in ("viscous", "inviscid"):
         raise ValueError(f"stage must be 'viscous' or 'inviscid', got {stage}")
 
-    _path = Path(dataset_path + f"_{seed}").with_suffix(".npz")
     key = jr.key(int(seed))
     model_key, dataset_key = jr.split(key)
 
@@ -507,19 +505,33 @@ def create_euler_task(
         "x0": x0,
         "h": h,
         "dimensionality": num_params,
+        "seed": int(seed),
+        "num_res_points": int(num_res_points),
+        "num_ic_points": int(num_ic_points),
+        "num_bc_points": int(num_bc_points),
+        "x_range": tuple(float(v) for v in x_range),
+        "t_range": tuple(float(v) for v in t_range),
+        "lam_ic": float(lam_ic),
+        "lam_bc": float(lam_bc),
+        "lam_f": float(lam_f),
+        "lam_nu": float(lam_nu),
     }
     tag.update(model_tags)
 
-    if not _path.exists():
-        dataset = create_points_dataset(
+    # The file is named by the tag, so other point arguments never
+    # reuse this task's points (ADR 0008).
+    _path = points_cache_path(dataset_path, tag)
+    ensure_points_dataset(
+        _path,
+        lambda: create_points_dataset(
             x_range=x_range,
             t_range=t_range,
             num_res_points=num_res_points,
             num_ic_points=num_ic_points,
             num_bc_points=num_bc_points,
             key=dataset_key,
-        )
-        save_dataset(dataset, _path)
+        ),
+    )
 
     return Task(
         model=model,

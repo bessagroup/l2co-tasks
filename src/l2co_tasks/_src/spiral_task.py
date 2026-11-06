@@ -130,7 +130,12 @@ def create_spiral_task(
 
     model_key, dataset_key, batch_key = jrd.split(key, 3)
 
-    tag = {"task_name": "spiral"}
+    tag = {
+        "task_name": "spiral",
+        "seed": seed,
+        "dataset_size": dataset_size,
+        "batch_size": batch_size,
+    }
 
     # model
     model, model_tags = rnn(

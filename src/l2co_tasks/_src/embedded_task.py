@@ -199,7 +199,8 @@ def create_embedded_bbob_task(
         characteristics (``separable`` forced to ``False`` by the
         dense embedding) plus ``embedded``,
         ``intrinsic_dimensionality`` and ``bulk_scale``.
-        ``tag["noise"]`` is ``noise > 0`` (a bool, not the level); a
+        ``tag["noise"]`` is ``noise > 0`` (a bool), and
+        ``tag["noise_level"]`` is the level when ``noise > 0``; a
         noisy task carries the loss without the noise in
         ``loss_fn_true``.
 
@@ -270,6 +271,8 @@ def create_embedded_bbob_task(
     tag["fn_name"] = fn_name
     tag["seed"] = seed
     tag["noise"] = noisy
+    if noise > 0.0:
+        tag["noise_level"] = float(noise)
 
     return Task(
         model=jnp.zeros(ambient_dim),

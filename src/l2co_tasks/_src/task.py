@@ -83,6 +83,59 @@ class _SortedFrozenset(frozenset):
         return "frozenset({" + ", ".join(sorted(map(repr, self))) + "})"
 
 
+def _make_hashable(value: Any) -> Any:
+    """Recursively convert lists to tuples and dicts to frozensets.
+
+    Dicts and frozensets become :class:`_SortedFrozenset`, whose printed
+    form does not depend on ``PYTHONHASHSEED``.
+
+    Parameters
+    ----------
+    value : Any
+        Value to convert.
+
+    Returns
+    -------
+    Any
+        Hashable value.
+    """
+    if isinstance(value, list):
+        return tuple(_make_hashable(v) for v in value)
+    elif isinstance(value, dict):
+        return _SortedFrozenset(
+            (k, _make_hashable(v)) for k, v in value.items()
+        )
+    elif isinstance(value, frozenset):
+        return _SortedFrozenset(_make_hashable(v) for v in value)
+    # Leave other types unchanged
+    return value
+
+
+def _digest(identity: frozenset) -> str:
+    """Short sha256 of an identity set, the same in every process."""
+    return hashlib.sha256(str(sorted(identity)).encode()).hexdigest()[:16]
+
+
+def tag_digest(tag: dict[str, Any]) -> str:
+    """Short sha256 of a tag alone, computed as :attr:`Task.hash` does.
+
+    For a task without constraints this equals its :attr:`Task.hash`.
+
+    Parameters
+    ----------
+    tag : dict[str, Any]
+        A task's tag.
+
+    Returns
+    -------
+    str
+        16-character hash string.
+    """
+    return _digest(
+        frozenset({k: _make_hashable(v) for k, v in tag.items()}.items())
+    )
+
+
 class _PickledShapeDtypeStruct:
     """What a pickled ``jax.ShapeDtypeStruct`` loads as, before it is rebuilt.
 
@@ -179,7 +232,8 @@ class Task(eqx.Module):
     loss_fn : Callable
         The loss function for the task.
     global_min : float
-        The global minimum value for the task, if known.
+        The global minimum value for the task, if known. It is saved
+        with the task but is not part of its identity (ADR 0008).
     pass_rng : bool
         Whether to pass a random key to the loss function.
     has_aux : bool
@@ -288,48 +342,26 @@ class Task(eqx.Module):
     @property
     def tag_hashable(self) -> tuple[tuple[str, Any]]:
         """
-        Returns a hashable representation of the tag dictionary.
+        Returns a hashable representation of the task's identity.
+
+        Identity is the tag plus the constraints, the latter only when
+        present (ADR 0002). ``global_min`` is not part of it, so
+        correcting an estimated minimum keeps the task the same
+        (ADR 0008).
 
         Returns
         -------
         frozenset of tuple[str, Any]
             Hashable version of the tag dictionary as a frozenset of
-            key-value pairs. Nested dicts and frozensets print their items
+            key-value pairs, plus a ``"constraints"`` entry when the task
+            has constraints. Nested dicts and frozensets print their items
             in sorted order, so :attr:`hash` is the same in every process.
         """
 
-        def make_hashable(value):
-            """
-            Recursively convert lists to tuples and dicts to frozensets.
+        tag_hashable = {k: _make_hashable(v) for k, v in self.tag.items()}
 
-            Dicts and frozensets become :class:`_SortedFrozenset`, whose
-            printed form does not depend on ``PYTHONHASHSEED``.
-
-            Parameters
-            ----------
-            value : Any
-                Value to convert.
-
-            Returns
-            -------
-            Any
-                Hashable value.
-            """
-            if isinstance(value, list):
-                return tuple(make_hashable(v) for v in value)
-            elif isinstance(value, dict):
-                return _SortedFrozenset(
-                    (k, make_hashable(v)) for k, v in value.items()
-                )
-            elif isinstance(value, frozenset):
-                return _SortedFrozenset(make_hashable(v) for v in value)
-            # Leave other types unchanged
-            return value
-
-        tag_hashable = {k: make_hashable(v) for k, v in self.tag.items()}
-
-        # Add global_min to the hashable tag
-        tag_hashable["global_min"] = self.global_min
+        # global_min is not part of identity: an estimated minimum can be
+        # corrected without changing which task it is (ADR 0008).
 
         # Constraints join identity only when present, so the hash of an
         # unconstrained task does not change (ADR 0002).
@@ -344,15 +376,17 @@ class Task(eqx.Module):
     @property
     def hash(self) -> str:
         """
-        Returns a short SHA256 hash of the tag.
+        Returns a short SHA256 hash of the task's identity.
+
+        It digests :attr:`tag_hashable` (the tag plus any constraints),
+        so it does not depend on ``global_min`` (ADR 0008).
 
         Returns
         -------
         str
             16-character hash string.
         """
-        t = sorted(self.tag_hashable)
-        return hashlib.sha256(str(t).encode()).hexdigest()[:16]
+        return _digest(self.tag_hashable)
 
     @staticmethod
     def _reconstruct_model_skeleton(hyperparams: dict):
