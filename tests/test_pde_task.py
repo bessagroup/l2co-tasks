@@ -78,3 +78,43 @@ def test_create_pde_task_loss_and_round_trip(tmp_path, pde_name):
     assert loaded.hash == task.hash
     after = float(loaded.loss_fn(loaded.model, **kwargs))
     assert after == pytest.approx(before, rel=1e-5)
+
+
+_PDE_ARGS = dict(
+    pde_task_name="convection",
+    beta=1.0,
+    seed=0,
+    x_range=(0.0, 1.0),
+    t_range=(0.0, 1.0),
+    xgrid_resolution=8,
+    tgrid_resolution=8,
+    num_ic_points=4,
+    num_bc_points=4,
+    num_res_points=8,
+    hidden_size=4,
+)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    "changed",
+    [
+        {"seed": 1},
+        {"xgrid_resolution": 9},
+        {"tgrid_resolution": 9},
+        {"num_ic_points": 5},
+        {"num_bc_points": 5},
+        {"num_res_points": 9},
+    ],
+)
+def test_pde_hash_follows_every_argument_that_changes_the_task(
+    tmp_path, changed
+):
+    """Same arguments, same task; one changed argument, another task."""
+    base = create_pde_task(dataset_path=str(tmp_path / "a"), **_PDE_ARGS)
+    again = create_pde_task(dataset_path=str(tmp_path / "b"), **_PDE_ARGS)
+    other = create_pde_task(
+        dataset_path=str(tmp_path / "c"), **{**_PDE_ARGS, **changed}
+    )
+    assert base.hash == again.hash
+    assert base.hash != other.hash

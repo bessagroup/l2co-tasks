@@ -179,7 +179,8 @@ class Task(eqx.Module):
     loss_fn : Callable
         The loss function for the task.
     global_min : float
-        The global minimum value for the task, if known.
+        The global minimum value for the task, if known. It is saved
+        with the task but is not part of its identity (ADR 0008).
     pass_rng : bool
         Whether to pass a random key to the loss function.
     has_aux : bool
@@ -288,13 +289,19 @@ class Task(eqx.Module):
     @property
     def tag_hashable(self) -> tuple[tuple[str, Any]]:
         """
-        Returns a hashable representation of the tag dictionary.
+        Returns a hashable representation of the task's identity.
+
+        Identity is the tag plus the constraints, the latter only when
+        present (ADR 0002). ``global_min`` is not part of it, so
+        correcting an estimated minimum keeps the task the same
+        (ADR 0008).
 
         Returns
         -------
         frozenset of tuple[str, Any]
             Hashable version of the tag dictionary as a frozenset of
-            key-value pairs. Nested dicts and frozensets print their items
+            key-value pairs, plus a ``"constraints"`` entry when the task
+            has constraints. Nested dicts and frozensets print their items
             in sorted order, so :attr:`hash` is the same in every process.
         """
 
@@ -328,8 +335,8 @@ class Task(eqx.Module):
 
         tag_hashable = {k: make_hashable(v) for k, v in self.tag.items()}
 
-        # Add global_min to the hashable tag
-        tag_hashable["global_min"] = self.global_min
+        # global_min is not part of identity: an estimated minimum can be
+        # corrected without changing which task it is (ADR 0008).
 
         # Constraints join identity only when present, so the hash of an
         # unconstrained task does not change (ADR 0002).
@@ -344,7 +351,10 @@ class Task(eqx.Module):
     @property
     def hash(self) -> str:
         """
-        Returns a short SHA256 hash of the tag.
+        Returns a short SHA256 hash of the task's identity.
+
+        It digests :attr:`tag_hashable` (the tag plus any constraints),
+        so it does not depend on ``global_min`` (ADR 0008).
 
         Returns
         -------

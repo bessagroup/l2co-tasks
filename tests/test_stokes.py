@@ -54,3 +54,38 @@ def test_loss_and_round_trip(tmp_path):
     assert loaded.hash == task.hash
     after = float(loaded.loss_fn(loaded.model, **loaded.loaded_dataset))
     assert after == pytest.approx(before, rel=1e-5)
+
+
+_STOKES_ARGS = dict(
+    seed=0,
+    num_res_points=16,
+    num_lid_points=8,
+    num_wall_points=8,
+    hidden_size=4,
+    num_layers=2,
+)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    "changed",
+    [
+        {"seed": 1},
+        {"num_res_points": 17},
+        {"num_lid_points": 9},
+        {"num_wall_points": 9},
+    ],
+)
+def test_stokes_hash_follows_every_argument_that_changes_the_task(
+    tmp_path, changed
+):
+    """Same arguments, same task; one changed argument, another task."""
+    base = create_stokes_task(dataset_path=str(tmp_path / "a"), **_STOKES_ARGS)
+    again = create_stokes_task(
+        dataset_path=str(tmp_path / "b"), **_STOKES_ARGS
+    )
+    other = create_stokes_task(
+        dataset_path=str(tmp_path / "c"), **{**_STOKES_ARGS, **changed}
+    )
+    assert base.hash == again.hash
+    assert base.hash != other.hash

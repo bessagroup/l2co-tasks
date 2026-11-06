@@ -22,8 +22,9 @@ The empirical-``global_min`` tasks (gaussian classification, spiral,
 MNIST-1D, gaussian-meta) have no closed-form minimum -- their
 ``global_min`` is benchmarked at creation -- so instead of a fixed value
 this suite pins their *determinism*: rebuilding the task reproduces the
-same ``global_min`` (and hence the same ``hash``), which is what keeps a
-benchmarked value safe to put in ``Task`` identity.
+same ``global_min`` and the same ``hash``, so every rebuild of a task
+writes the same f* (``global_min`` is no longer part of identity, ADR
+0008, but l2co refuses an append whose f* differs).
 """
 
 from __future__ import annotations
@@ -333,8 +334,8 @@ def test_empirical_global_min_is_deterministic(case_id, tmp_path):
 
     The benchmark search that sets ``global_min`` is seeded, so two
     builds with identical arguments (and the same cached dataset) must
-    yield the same float -- otherwise the value, which feeds
-    ``tag_hashable``, would make the task's ``hash`` unstable.
+    yield the same float -- otherwise one task would carry a different
+    f* from one build to the next.
 
     ``global_min`` must be non-negative (these are MSE / cross-entropy
     losses) but may be ``0``: the strengthened estimator's L-BFGS arm

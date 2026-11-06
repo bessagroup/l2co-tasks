@@ -22,8 +22,10 @@ have none. Adding noise to a function that is already noisy is
 refused.
 
 One rule, :func:`noisy_losses`, decides whether a task is noisy, and
-sets ``tag["noise"]`` (a bool; the added level is not recorded in the
-tag, so it is not part of the task's identity) and ``pass_rng`` alike.
+sets ``tag["noise"]`` (a bool) and ``pass_rng`` alike. An added level
+is recorded apart, as ``tag["noise_level"]``, and only when
+``noise > 0``, so it is part of the task's identity (ADR 0008) while a
+task without added noise keeps its tag.
 A noisy task also carries its noise-free loss, ``Task.loss_fn_true``:
 bbob-jax's ``Problem.fn_true`` for a function noisy by itself, the
 function without the noise wrapper for added noise, through the same
@@ -313,9 +315,9 @@ def create_bbob_task(
     -------
     Task
         Configured optimization task with scaled and optionally noisy
-        objective function. ``tag["noise"]`` is ``noise > 0`` (a bool,
-        not the level); a noisy task carries its noise-free loss in
-        ``loss_fn_true``.
+        objective function. ``tag["noise"]`` is ``noise > 0`` (a bool),
+        and ``tag["noise_level"]`` is the level when ``noise > 0``; a
+        noisy task carries its noise-free loss in ``loss_fn_true``.
 
     Raises
     ------
@@ -356,6 +358,8 @@ def create_bbob_task(
     tag["fn_name"] = fn_name
     tag["seed"] = seed
     tag["noise"] = noisy
+    if noise > 0.0:
+        tag["noise_level"] = float(noise)
 
     return Task(
         model=model,
@@ -488,7 +492,8 @@ def create_cec2005_task(
         Configured optimization task with scaled and optionally noisy
         objective function. ``tag["noise"]`` is True for ``f4``,
         ``f17``, ``f24`` and ``f25`` (noisy by themselves, by bbob-jax's
-        own characteristic) and for ``noise > 0``; a noisy task carries
+        own characteristic) and for ``noise > 0``, when
+        ``tag["noise_level"]`` records the level; a noisy task carries
         its noise-free loss in ``loss_fn_true``.
 
     Raises
@@ -531,6 +536,8 @@ def create_cec2005_task(
     tag["fn_name"] = fn_name
     tag["seed"] = seed
     tag["noise"] = noisy
+    if noise > 0.0:
+        tag["noise_level"] = float(noise)
 
     return Task(
         model=model,
@@ -609,6 +616,8 @@ def create_cec2017_task(
     tag["fn_name"] = fn_name
     tag["seed"] = seed
     tag["noise"] = noisy
+    if noise > 0.0:
+        tag["noise_level"] = float(noise)
 
     return Task(
         model=model,
@@ -733,6 +742,8 @@ def create_cec2013lsgo_task(
     tag["fn_name"] = fn_name
     tag["seed"] = seed
     tag["noise"] = noisy
+    if noise > 0.0:
+        tag["noise_level"] = float(noise)
 
     return Task(
         model=model,

@@ -79,7 +79,8 @@ the file it has today.
 
 ## Identity
 
-The databank keys every result by `Task.hash`. So:
+The databank keys every result by `Task.hash`. So (ADR 0008 later took
+`global_min` out of identity; constraints stay in it, as below):
 
 - **Constraints enter identity only when present.** `tag_hashable` gains
   a `constraints` entry for a constrained task and nothing otherwise.

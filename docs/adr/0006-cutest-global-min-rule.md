@@ -118,7 +118,8 @@ This replaces ADR 0004's "lower of the estimate and `SOLTN`", and its
 exception for rows that never settle but stay above `SOLTN`.
 
 The `source` column says which evidence won: `override`, `reached` or
-`soltn`. `source` is not part of a task's identity; only `global_min` is.
+`soltn`. `source` is not part of a task's identity; only `global_min` is
+(superseded in part by ADR 0008: neither is now).
 
 ## Checked against the committed table
 

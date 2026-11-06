@@ -77,3 +77,31 @@ def test_create_spiral_task_round_trip(tmp_path):
     ds2 = loaded.loaded_dataset
     after = float(loaded.loss_fn(loaded.model, ds2["x"][:4], ds2["y"][:4]))
     assert after == pytest.approx(before, rel=1e-5)
+
+
+_SPIRAL_ARGS = dict(
+    hidden_size=4,
+    dataset_size=32,
+    seed=0,
+    batch_size=8,
+    estimate_global_min=False,
+)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    "changed", [{"seed": 1}, {"dataset_size": 64}, {"batch_size": 16}]
+)
+def test_spiral_hash_follows_every_argument_that_changes_the_task(
+    tmp_path, changed
+):
+    """Same arguments, same task; one changed argument, another task."""
+    base = create_spiral_task(dataset_path=str(tmp_path / "a"), **_SPIRAL_ARGS)
+    again = create_spiral_task(
+        dataset_path=str(tmp_path / "b"), **_SPIRAL_ARGS
+    )
+    other = create_spiral_task(
+        dataset_path=str(tmp_path / "c"), **{**_SPIRAL_ARGS, **changed}
+    )
+    assert base.hash == again.hash
+    assert base.hash != other.hash

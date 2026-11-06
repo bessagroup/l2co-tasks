@@ -10,7 +10,12 @@ seeds. Without the fix, seeds 0, 1 and 2 split every multi-item shape
 below.
 
 A nested container with zero or one item always printed the same way;
-its hash is pinned to the value recorded before the fix.
+its hash was pinned to the value recorded before the fix.
+
+Every value below was re-pinned once when ``global_min`` left the
+task's identity (l2co-tasks ADR 0008, 2026-11-06): these tasks carry no
+``global_min``, but the hash used to digest a ``("global_min", None)``
+entry, so every one of them moved (old values in the comments).
 """
 
 from __future__ import annotations
@@ -53,19 +58,21 @@ print(json.dumps({
 }))
 """
 
-#: Recorded before the fix, on ``21b95a1``: identical under every seed.
+#: Recorded before the fix, on ``21b95a1``: identical under every seed;
+#: re-pinned for ADR 0008.
 UNCHANGED = {
-    "empty_dict": "d95200dd15f5925e",
-    "one_key": "9be281e36f94efd3",
-    "one_frozen": "b72124bd14ecfb23",
+    "empty_dict": "5ba75059c6e733ec",  # was d95200dd15f5925e
+    "one_key": "4f509e6aa4c8ee81",  # was 9be281e36f94efd3
+    "one_frozen": "9f05ee3f6d5356da",  # was b72124bd14ecfb23
 }
 
 #: Before the fix each of these took one of several values, depending
 #: on the seed; the fix keeps the one with the items in sorted order.
+#: Re-pinned for ADR 0008.
 CANONICAL = {
-    "two_keys": "89397f662c6cc552",
-    "deep": "6922ebe31ee175be",
-    "frozen": "cee0c82dcf1332ff",
+    "two_keys": "895c069d9b5ad0b2",  # was 89397f662c6cc552
+    "deep": "439ea98f8b96e6b8",  # was 6922ebe31ee175be
+    "frozen": "3ac9e475a7e76b9a",  # was cee0c82dcf1332ff
 }
 
 

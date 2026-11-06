@@ -61,3 +61,40 @@ def test_loss_and_round_trip(tmp_path):
     assert loaded.hash == task.hash
     after = float(loaded.loss_fn(loaded.model, **loaded.loaded_dataset))
     assert after == pytest.approx(before, rel=1e-5)
+
+
+_IB_ARGS = dict(
+    seed=0,
+    num_res_points=16,
+    num_ic_points=8,
+    num_bc_points=8,
+    hidden_size=4,
+    num_layers=2,
+)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    "changed",
+    [
+        {"seed": 1},
+        {"num_res_points": 17},
+        {"num_ic_points": 9},
+        {"num_bc_points": 9},
+    ],
+)
+def test_inviscid_burgers_hash_follows_every_argument_that_changes_the_task(
+    tmp_path, changed
+):
+    """Same arguments, same task; one changed argument, another task."""
+    base = create_inviscid_burgers_task(
+        dataset_path=str(tmp_path / "a"), **_IB_ARGS
+    )
+    again = create_inviscid_burgers_task(
+        dataset_path=str(tmp_path / "b"), **_IB_ARGS
+    )
+    other = create_inviscid_burgers_task(
+        dataset_path=str(tmp_path / "c"), **{**_IB_ARGS, **changed}
+    )
+    assert base.hash == again.hash
+    assert base.hash != other.hash

@@ -4,9 +4,9 @@
 ``shift_to_quality_value`` subtracts it to form the *quality value*, and
 the downstream log-scaling (``min_custom``) takes ``log10`` of the
 result -- so a loss *below* ``global_min`` produces negative quality
-values and silently corrupts the scaling. ``global_min`` is also baked
-into ``Task`` identity (``tag_hashable`` / ``hash``). It must therefore
-be a genuine lower bound on the achievable loss -- a **floor**.
+values and silently corrupts the scaling. It must therefore be a
+genuine lower bound on the achievable loss -- a **floor**. (It is no
+longer part of ``Task`` identity, ADR 0008.)
 
 The three mechanisms carry different risk (see ``CONTEXT.md`` and
 ``docs/adr/0001-global-min-is-a-floor-validated-against-all.md``):

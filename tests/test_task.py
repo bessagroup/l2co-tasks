@@ -8,6 +8,8 @@ Save/load is exercised in ``test_task_io.py``.
 
 from __future__ import annotations
 
+import dataclasses
+
 import equinox as eqx
 import jax.numpy as jnp
 import jax.random as jr
@@ -86,7 +88,7 @@ def test_tag_hashable_converts_lists_and_dicts():
     th = dict(t.tag_hashable)
     assert th["vals"] == (1, 2, 3)
     assert th["nested"] == frozenset({("a", 1), ("b", (4, 5))})
-    assert th["global_min"] is None
+    assert "global_min" not in th
 
 
 def test_hash_is_short_and_deterministic():
@@ -99,11 +101,20 @@ def test_hash_is_short_and_deterministic():
     assert t1.hash != t3.hash
 
 
-def test_hash_changes_with_global_min():
-    """``global_min`` participates in the hash via ``tag_hashable``."""
-    t1 = Task(model=jnp.zeros(1), loss_fn=sum_of_squares, global_min=0.0)
-    t2 = Task(model=jnp.zeros(1), loss_fn=sum_of_squares, global_min=1.0)
-    assert t1.hash != t2.hash
+def test_correcting_global_min_keeps_the_task_identity():
+    """A corrected ``global_min`` is the same task (ADR 0008)."""
+    t1 = Task(
+        model=jnp.zeros(1),
+        loss_fn=sum_of_squares,
+        tag={"x": 1},
+        global_min=0.0,
+    )
+    t2 = dataclasses.replace(t1, global_min=-1.5)
+    t3 = dataclasses.replace(t1, global_min=None)
+    assert t2.global_min == -1.5
+    assert t1.hash == t2.hash == t3.hash
+    assert t1 == t2 == t3
+    assert hash(t1) == hash(t2) == hash(t3)
 
 
 def test_equality_is_tag_based_not_weight_based(rng_key):

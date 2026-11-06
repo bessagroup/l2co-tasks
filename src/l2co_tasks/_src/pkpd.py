@@ -55,7 +55,7 @@ from f3dasm import Block, ExperimentData
 from jaxtyping import Array, PyTree
 
 # Local
-from ._io import save_dataset
+from ._io import ensure_points_dataset
 from .experimentdata import build_task_experimentdata
 from .models import mlp
 from .pde import mse
@@ -362,12 +362,17 @@ def create_pkpd_task(
         "dose_times": tuple(float(d) for d in dose_times),
         "omega0": omega0,
         "dimensionality": num_params,
+        "seed": int(seed),
+        "point_allocation": tuple(
+            (float(t0), float(t1), int(n)) for t0, t1, n in point_allocation
+        ),
     }
     tag.update(model_tags)
 
-    if not _path.exists():
-        dataset = create_points_dataset(point_allocation, key=dataset_key)
-        save_dataset(dataset, _path)
+    ensure_points_dataset(
+        _path,
+        lambda: create_points_dataset(point_allocation, key=dataset_key),
+    )
 
     return Task(
         model=model,
