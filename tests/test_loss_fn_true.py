@@ -73,14 +73,43 @@ def test_absent_field_writes_no_header_key(simple_task, eqx_path):
     assert Task.load(path).loss_fn_true is None
 
 
-def test_pre_existing_file_resaves_byte_for_byte(tmp_path):
+def _header_and_leaves(path) -> tuple[dict, bytes]:
+    """The JSON header line of an ``.eqx`` file and the bytes after it."""
+    line, leaves = Path(path).read_bytes().split(b"\n", 1)
+    return json.loads(line), leaves
+
+
+#: The pickled model skeleton: its bytes follow the running JAX, whose
+#: ``ShapeDtypeStruct`` pickles different fields from JAX 0.11 on (see
+#: ``test_skeleton_across_jax_versions.py``), so it is compared by what it
+#: describes instead.
+SKELETON_KEY = "model_shape_hex"
+
+
+def test_pre_existing_file_resaves_unchanged(tmp_path):
     """A file written before the field existed saves back unchanged, so
-    the field adds nothing to a noise-free task's ``.eqx`` bytes."""
+    the field adds nothing to a noise-free task's ``.eqx`` file: the same
+    header keys, the same header values, the same leaf bytes, and a
+    skeleton describing the same shapes and dtypes."""
     with jax.enable_x64(True):
         task = Task.load(FIXTURE)
         resaved = Task.save(task, str(tmp_path / "resaved"))
+        reloaded = Task.load(resaved)
     assert task.loss_fn_true is None
-    assert Path(resaved).read_bytes() == FIXTURE.read_bytes()
+
+    old_header, old_leaves = _header_and_leaves(FIXTURE)
+    new_header, new_leaves = _header_and_leaves(resaved)
+    assert list(new_header) == list(old_header)
+    assert "loss_fn_true" not in new_header
+    for key in old_header:
+        if key != SKELETON_KEY:
+            assert new_header[key] == old_header[key], key
+    assert new_leaves == old_leaves
+
+    def described(model):
+        return jax.tree.map(lambda leaf: (leaf.shape, str(leaf.dtype)), model)
+
+    assert described(reloaded.model) == described(task.model)
 
 
 def test_round_trip_keeps_the_noise_free_loss(eqx_path):
