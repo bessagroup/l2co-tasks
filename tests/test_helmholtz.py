@@ -75,3 +75,34 @@ def test_invalid_dim_raises(tmp_path):
             dataset_path=str(tmp_path / "bad"),
             dim=4,
         )
+
+
+_HELMHOLTZ_ARGS = dict(
+    a1=1.0,
+    a2=4.0,
+    k=1.0,
+    seed=0,
+    dim=2,
+    num_res_points=16,
+    hidden_size=4,
+    num_layers=2,
+)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("changed", [{"seed": 1}, {"num_res_points": 17}])
+def test_helmholtz_hash_follows_every_argument_that_changes_the_task(
+    tmp_path, changed
+):
+    """Same arguments, same task; one changed argument, another task."""
+    base = create_helmholtz_task(
+        dataset_path=str(tmp_path / "a"), **_HELMHOLTZ_ARGS
+    )
+    again = create_helmholtz_task(
+        dataset_path=str(tmp_path / "b"), **_HELMHOLTZ_ARGS
+    )
+    other = create_helmholtz_task(
+        dataset_path=str(tmp_path / "c"), **{**_HELMHOLTZ_ARGS, **changed}
+    )
+    assert base.hash == again.hash
+    assert base.hash != other.hash

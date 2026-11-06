@@ -146,7 +146,9 @@ coordinate's size.
 > first committed table was made.
 
 ADR 0001 requires `global_min` to be a **floor**, and it is part of the
-task's identity. pycutest exposes no optimal values. Many SIF files
+task's identity (superseded in part by ADR 0008: it no longer is, and a
+task built with an explicit `global_min=` or a provisional `table=` is
+the same task). pycutest exposes no optimal values. Many SIF files
 record one in a comment, as `*LO SOLTN 1.2701`, `*LO SOLTN(10)
 7.08765D-5` (per size, with a Fortran exponent) or `*LO SOLTN(50) ???`
 (unknown). These values are often rounded, and some are local optima.

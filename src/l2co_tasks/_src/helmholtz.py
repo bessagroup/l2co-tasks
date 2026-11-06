@@ -42,7 +42,7 @@ from f3dasm import Block, ExperimentData
 from jaxtyping import Array, PyTree
 
 # Local
-from ._io import save_dataset
+from ._io import ensure_points_dataset
 from .experimentdata import build_task_experimentdata
 from .models import fourier_mlp
 from .pde import mse
@@ -222,17 +222,20 @@ def create_helmholtz_task(
         "k": k,
         "modes": tuple(int(m) for m in modes),
         "dimensionality": num_params,
+        "seed": int(seed),
+        "num_res_points": int(num_res_points),
     }
     tag.update(model_tags)
 
-    if not _path.exists():
-        dataset = create_points_dataset(
+    ensure_points_dataset(
+        _path,
+        lambda: create_points_dataset(
             x_range=x_range,
             dim=dim,
             num_res_points=num_res_points,
             key=dataset_key,
-        )
-        save_dataset(dataset, _path)
+        ),
+    )
 
     return Task(
         model=model,

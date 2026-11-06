@@ -1,5 +1,10 @@
 # `global_min` is a floor, validated against the full optimizer suite
 
+> [!NOTE]
+> Superseded in part by ADR 0008: `global_min` is no longer part of task
+> identity, so re-estimating it no longer changes `hash`. The floor rule
+> below still holds.
+
 ## Context
 
 `global_min` is not just informational: `l2co`'s `shift_to_quality_value`

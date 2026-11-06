@@ -46,7 +46,7 @@ from f3dasm import Block, ExperimentData
 from jaxtyping import Array, PyTree
 
 # Local
-from ._io import save_dataset
+from ._io import ensure_points_dataset
 from .experimentdata import build_task_experimentdata
 from .models import mlp
 from .pde import mse
@@ -265,19 +265,24 @@ def create_stokes_task(
         "height": height,
         "u_lid": u_lid,
         "dimensionality": num_params,
+        "seed": int(seed),
+        "num_res_points": int(num_res_points),
+        "num_lid_points": int(num_lid_points),
+        "num_wall_points": int(num_wall_points),
     }
     tag.update(model_tags)
 
-    if not _path.exists():
-        dataset = create_points_dataset(
+    ensure_points_dataset(
+        _path,
+        lambda: create_points_dataset(
             angle_deg=angle_deg,
             height=height,
             num_res_points=num_res_points,
             num_lid_points=num_lid_points,
             num_wall_points=num_wall_points,
             key=dataset_key,
-        )
-        save_dataset(dataset, _path)
+        ),
+    )
 
     return Task(
         model=model,

@@ -64,3 +64,29 @@ def test_create_mnist1d_task_loss_and_round_trip(_mnist1d_task, tmp_path):
     assert loaded.hash == task.hash
     after = float(loaded.loss_fn(loaded.model, x, y))
     assert after == pytest.approx(before, rel=1e-5)
+
+
+_MNIST1D_ARGS = dict(
+    dataset_size=64, seed=0, batch_size=8, estimate_global_min=False
+)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    "changed", [{"seed": 1}, {"dataset_size": 96}, {"batch_size": 16}]
+)
+def test_mnist1d_hash_follows_every_argument_that_changes_the_task(
+    tmp_path, changed
+):
+    """Same arguments, same task; one changed argument, another task."""
+    base = create_mnist1d_task(
+        dataset_path=str(tmp_path / "a"), **_MNIST1D_ARGS
+    )
+    again = create_mnist1d_task(
+        dataset_path=str(tmp_path / "b"), **_MNIST1D_ARGS
+    )
+    other = create_mnist1d_task(
+        dataset_path=str(tmp_path / "c"), **{**_MNIST1D_ARGS, **changed}
+    )
+    assert base.hash == again.hash
+    assert base.hash != other.hash

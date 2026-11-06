@@ -4,10 +4,10 @@ A benchmark task is *noisy* when its loss is stochastic: the function is
 noisy by itself (bbob-jax's own per-function ``noise`` characteristic --
 the whole BBOB-noisy suite and CEC 2005 F4, F17, F24 and F25) or
 multiplicative noise is added (``noise > 0``). ``tag["noise"]`` and
-``pass_rng`` both record exactly that, as a Python ``bool``. The added
-level is a builder argument only: it is not in the tag, so it is not
-in the hash either (dataset paper protocol revision, Section 5 item 10,
-decided 2026-11-05).
+``pass_rng`` both record exactly that, as a Python ``bool`` (dataset
+paper protocol revision, Section 5 item 10, decided 2026-11-05). An
+added level is recorded apart, as ``tag["noise_level"]``, and only when
+it is set, so it is part of the task's identity (ADR 0008).
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from l2co_tasks import (
     create_bbob_noisy_task,
     create_bbob_task,
     create_cec2005_task,
+    create_cec2013lsgo_task,
     create_cec2017_task,
     create_embedded_bbob_task,
 )
@@ -105,15 +106,41 @@ def test_cec2005_noise_follows_bbob_jax_characteristic(fn_name):
     assert expected is (fn_name in _CEC2005_NOISY)
 
 
-def test_added_noise_level_is_not_part_of_identity():
-    """The level is dropped from the tag, so two levels on one function
-    are the same task (an accepted consequence of the bool-only tag;
-    no shipped config sets an added level)."""
-    low = create_bbob_task("sphere", 0, 3, noise=0.1)
-    high = create_bbob_task("sphere", 0, 3, noise=0.2)
-    assert low.tag == high.tag
-    assert low.hash == high.hash
-    assert low.hash != create_bbob_task("sphere", 0, 3).hash
+ADDED_NOISE_BUILDERS = [
+    pytest.param(
+        lambda noise: create_bbob_task("sphere", 0, 3, noise=noise), id="bbob"
+    ),
+    pytest.param(
+        lambda noise: create_cec2005_task("f1", 0, 3, noise=noise),
+        id="cec2005",
+    ),
+    pytest.param(
+        lambda noise: create_cec2017_task("cec2017_f1", 0, 3, noise=noise),
+        id="cec2017",
+    ),
+    pytest.param(
+        lambda noise: create_cec2013lsgo_task(
+            "cec2013lsgo_f1", 0, 1000, noise=noise
+        ),
+        id="cec2013lsgo",
+    ),
+    pytest.param(_embedded, id="embedded"),
+]
+
+
+@pytest.mark.parametrize("build", ADDED_NOISE_BUILDERS)
+def test_added_noise_level_is_part_of_identity(build):
+    """The added level is recorded as ``tag["noise_level"]`` (ADR 0008):
+    two levels on one function are two tasks, one level is one task,
+    and a task without added noise keeps its tag without the key."""
+    low, again, high = build(0.1), build(0.1), build(0.2)
+    clean = build(0.0)
+    assert low.tag["noise_level"] == 0.1
+    assert low.tag["noise"] is True
+    assert low.hash == again.hash
+    assert low.hash != high.hash
+    assert "noise_level" not in clean.tag
+    assert clean.hash != low.hash
 
 
 @pytest.mark.parametrize("fn_name", sorted(_CEC2005_NOISY))

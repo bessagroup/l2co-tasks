@@ -23,7 +23,16 @@ says whether the loss is stochastic, instead of the added-noise level.
 That changed every benchmark value below that carried ``noise: 0.0`` or
 ``0.1`` (old values in the comments); bbob-noisy already carried
 ``True`` and quadratic carries no ``noise`` key, so those two kept
-theirs. The ``global_min`` part of each hash is unchanged.
+theirs.
+
+Re-keyed a second time, on purpose, when ``global_min`` left the
+task's identity (l2co-tasks ADR 0008, 2026-11-06): the hash is now the
+tag plus constraints only, so an estimated minimum can be corrected
+without changing the task. Every value below moved once (the value
+before is in the comment next to it); the bbob sphere with added noise
+also gained ``tag["noise_level"]`` in the same change. The
+``global_min`` given to the task-level rows no longer enters the hash;
+it stays in the table to show that.
 """
 
 from __future__ import annotations
@@ -64,17 +73,19 @@ def _loss(model):
 
 
 TASK_LEVEL = [
-    pytest.param({}, None, "1afc2ac49a13728b", id="empty-tag-no-gmin"),
+    pytest.param(
+        {}, None, "4f53cda18c2baa0c", id="empty-tag-no-gmin"
+    ),  # was 1afc2ac49a13728b
     pytest.param(
         {"task_name": "simple", "seed": 0},
         0.0,
-        "abe00eaddcbeec8d",
+        "c42c78a0013db8fb",  # was abe00eaddcbeec8d
         id="simple",
     ),
     pytest.param(
         {"task_name": "nested", "dims": [2, 3], "meta": {"a": 1}},
         1.5,
-        "b56cd279e41ea485",
+        "d930f35a76d7fb34",  # was b56cd279e41ea485
         id="list-and-dict",
     ),
     pytest.param(
@@ -86,7 +97,7 @@ TASK_LEVEL = [
             "noise": 0.0,
         },
         -26.187623977661133,
-        "cf276caf6843c7f2",
+        "7fa90fc1bae3ba5a",  # was cf276caf6843c7f2
         id="bbob-like",
     ),
 ]
@@ -110,55 +121,55 @@ FACTORY = [
         lambda: create_bbob_task(
             fn_name="sphere", seed=0, dimensionality=3, noise=0.0
         ),
-        "5bd6dce2605aeeff",  # was 13d7d4ff60a64f7f (noise 0.0)
+        "f0206f5d4db278dd",  # was 5bd6dce2605aeeff
         id="bbob-sphere",
     ),
     pytest.param(
         lambda: create_bbob_task(
             fn_name="rastrigin", seed=0, dimensionality=3, noise=0.0
         ),
-        "5cdda7a083965527",  # was 367e1bd1199584dc (noise 0.0)
+        "b53a4a511c264d6e",  # was 5cdda7a083965527
         id="bbob-rastrigin",
     ),
     pytest.param(
         lambda: create_bbob_task(
             fn_name="sphere", seed=0, dimensionality=3, noise=0.1
         ),
-        "4559d4190c9b5511",  # was 0cd204bc360894e1 (noise 0.1)
+        "92a9802b5bf3ba41",  # was 4559d4190c9b5511
         id="bbob-sphere-noisy",
     ),
     pytest.param(
         lambda: create_bbob_noisy_task(
             fn_name="bbob_noisy_f101", seed=0, dimensionality=3
         ),
-        "40efba11bf49faa7",
+        "411b7960eeb9bc46",  # was 40efba11bf49faa7
         id="bbob-noisy-f101",
         marks=_NEEDS_BBOB_NOISY,
     ),
     pytest.param(
         lambda: create_cec2005_task(fn_name="f1", seed=0, dimensionality=3),
-        "3b1c84f96f4b83af",  # was dfbdf20255a3263f (noise 0.0)
+        "c18d2a37bf59e310",  # was 3b1c84f96f4b83af
         id="cec2005-f1",
     ),
     pytest.param(
         lambda: create_cec2005_task(fn_name="f4", seed=0, dimensionality=3),
         # Noisy by itself; tagged noise 0.0 (hash 0f6057f965f6135c)
-        # before the revision.
-        "718e9e272b2e9880",
+        # before the protocol revision.
+        "2a48b4eb5413283d",  # was 718e9e272b2e9880
         id="cec2005-f4",
     ),
     pytest.param(
         lambda: create_cec2017_task(
             fn_name="cec2017_f1", seed=0, dimensionality=3
         ),
-        "4676ee91d04a3a4d",  # was 7291d184e56719ec (noise 0.0)
+        "ad68f378bb173ba6",  # was 4676ee91d04a3a4d
         id="cec2017-f1",
     ),
     pytest.param(
         lambda: create_quadratic_task(
             dimensionality=4, seed=0, n_observations=None
         ),
-        "32a8ec64a8595ee7",
+        "df5348e58d14aabb",  # was 32a8ec64a8595ee7
         id="quadratic-square",
     ),
 ]
@@ -176,7 +187,8 @@ def test_pre_constraints_file_loads_unchanged():
         task = Task.load(FIXTURE)
     assert task.constraints == ()
     assert task.loss_fn_true is None
-    assert task.hash == "32a8ec64a8595ee7"
+    # was 32a8ec64a8595ee7, before global_min left identity (ADR 0008)
+    assert task.hash == "df5348e58d14aabb"
     with open(FIXTURE, "rb") as f:
         stored = json.loads(f.readline().decode())
     assert set(stored) == PRE_CONSTRAINTS_HEADER_KEYS
