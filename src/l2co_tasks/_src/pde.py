@@ -34,7 +34,6 @@ PDETaskSampler
 from collections.abc import Callable
 from copy import deepcopy
 from functools import partial
-from pathlib import Path
 
 # Third-party
 import equinox as eqx
@@ -45,7 +44,7 @@ from f3dasm import Block, ExperimentData
 from jax import Array
 from jaxtyping import PyTree
 
-from ._io import ensure_points_dataset
+from ._io import ensure_points_dataset, points_cache_path
 
 # Local
 from .experimentdata import build_task_experimentdata
@@ -457,8 +456,6 @@ def create_pde_task(
     """
     tag = {}
 
-    _path = Path(dataset_path + f"_{seed}").with_suffix(".npz")
-
     key = jr.key(int(seed))
 
     model_key, dataset_key = jr.split(key)
@@ -470,6 +467,9 @@ def create_pde_task(
     tag["num_ic_points"] = int(num_ic_points)
     tag["num_bc_points"] = int(num_bc_points)
     tag["num_res_points"] = int(num_res_points)
+    tag["x_range"] = tuple(float(v) for v in x_range)
+    tag["t_range"] = tuple(float(v) for v in t_range)
+    tag["hidden_size"] = int(hidden_size)
 
     if pde_task_name == "convection":
         tag["beta"] = beta
@@ -521,6 +521,9 @@ def create_pde_task(
     num_params = count_parameters(model)
     tag["dimensionality"] = num_params
 
+    # The file is named by the tag, so other point arguments never
+    # reuse this task's points (ADR 0008).
+    _path = points_cache_path(dataset_path, tag)
     ensure_points_dataset(
         _path,
         lambda: create_points_dataset(

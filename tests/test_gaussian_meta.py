@@ -57,3 +57,43 @@ def test_loss_is_finite_on_every_corner_of_the_box(tmp_path):
     for corner in itertools.product([0.0, 1.0], repeat=3):
         loss = task.loss_fn(jnp.array(corner, dtype=jnp.float32), **data)
         assert jnp.isfinite(loss), corner
+
+
+_GAUSSIAN_META_ARGS = dict(
+    seed=0,
+    num_gaussians=2,
+    num_samples_per_gaussian=4,
+    dim_points=2,
+    inner_steps=2,
+    l2_regularization=0.01,
+    estimate_global_min=False,
+)
+
+
+@pytest.mark.parametrize(
+    "changed",
+    [
+        {"seed": 1},
+        {"num_gaussians": 3},
+        {"num_samples_per_gaussian": 5},
+        {"dim_points": 3},
+        {"inner_steps": 3},
+        {"l2_regularization": 0.02},
+    ],
+)
+def test_gaussian_meta_hash_follows_every_argument_that_changes_the_task(
+    tmp_path, changed
+):
+    """Same arguments, same task; one changed argument, another task."""
+    base = create_gaussian_meta_task(
+        dataset_path=str(tmp_path / "a"), **_GAUSSIAN_META_ARGS
+    )
+    again = create_gaussian_meta_task(
+        dataset_path=str(tmp_path / "b"), **_GAUSSIAN_META_ARGS
+    )
+    other = create_gaussian_meta_task(
+        dataset_path=str(tmp_path / "c"),
+        **{**_GAUSSIAN_META_ARGS, **changed},
+    )
+    assert base.hash == again.hash
+    assert base.hash != other.hash

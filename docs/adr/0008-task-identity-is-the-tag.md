@@ -47,15 +47,34 @@ added by this change (none removed or renamed):
 | --- | --- |
 | `create_spiral_task` | `seed`, `dataset_size`, `batch_size` |
 | `create_mnist1d_task` | `dataset_size`, `batch_size` |
-| `create_pde_task` | `seed`, `xgrid_resolution`, `tgrid_resolution`, `num_ic_points`, `num_bc_points`, `num_res_points` |
-| `create_helmholtz_task` | `seed`, `num_res_points` |
-| `create_viscous_burgers_task`, `create_inviscid_burgers_task`, `create_euler_task` | `seed`, `num_res_points`, `num_ic_points`, `num_bc_points` |
+| `create_gaussian_meta_task` | `inner_steps`, `l2_regularization` |
+| `create_pde_task` | `seed`, `xgrid_resolution`, `tgrid_resolution`, `num_ic_points`, `num_bc_points`, `num_res_points`, `x_range`, `t_range`, `hidden_size` |
+| `create_helmholtz_task` | `seed`, `num_res_points`, `x_range` |
+| `create_viscous_burgers_task`, `create_inviscid_burgers_task` | `seed`, `num_res_points`, `num_ic_points`, `num_bc_points` |
+| `create_euler_task` | `seed`, `num_res_points`, `num_ic_points`, `num_bc_points`, `x_range`, `t_range`, `lam_ic`, `lam_bc`, `lam_f`, `lam_nu` |
 | `create_stokes_task` | `seed`, `num_res_points`, `num_lid_points`, `num_wall_points` |
 | `create_pkpd_task` | `seed`, `point_allocation` |
 | bbob, CEC 2005, CEC 2017, CEC 2013 LSGO, embedded | `noise_level`, only when `noise > 0` |
 
+Ranges are tagged as tuples of floats, counts as ints and loss weights
+as floats, so the tag hashes the same in every process. `create_euler_task`
+tags `lam_nu` in both stages, although only the viscous stage uses it, as
+it already tagged `h` (used only by the inviscid stage).
+
 `tag["noise"]` stays the bool that says whether the loss is
 stochastic. A task without added noise keeps its tag exactly.
+
+**A PINN task's cached points are named by its tag.** The PINN
+factories cache their collocation points in an `.npz` file and write it
+only when it is missing. The file is `<dataset_path>_<digest>.npz`, where
+`<digest>` is the short sha256 of the tag, computed as `Task.hash` does
+(`_io.points_cache_path`; a PINN task has no constraints, so it is the
+task's hash). Two tasks with different tags never share a file, even when
+their point arrays have the same shapes (a grid resolution, a domain
+range, a pkpd block boundary). The seed is in the tag, so it still
+separates files. `ensure_points_dataset` keeps its shape check as a
+backstop. Cache files under the old `<dataset_path>_<seed>.npz` names are
+simply not found, and each task regenerates its points once.
 
 **CUTEst with an explicit `global_min=` or a provisional `table=` is the
 same task** as the one built from the committed table. The SIF file's
@@ -85,13 +104,14 @@ ADR 0002 stands: constraints are part of identity, only when present.
   task's, and l2co_experiments' create step does the same, before
   anything is written (exact float64 comparison; NaN equals NaN). A tool
   to update f* in place comes later.
-- **A cached PINN point set must match its tag.** The PINN factories
-  write their `.npz` points only when the file is missing. Rebuilding at
-  the same `dataset_path` and seed with other point counts now raises
-  `ValueError`, instead of running a task whose tag claims the new counts
-  on the old points. Only array names and shapes are compared, so a change
-  that keeps every shape (a grid resolution, a pkpd block boundary) is
-  still not caught.
+- **A cached PINN point set belongs to its tag.** Rebuilding at the same
+  `dataset_path` with other point arguments writes a new file next to the
+  old one, instead of running a task whose tag claims new points on the
+  old ones. Old `<dataset_path>_<seed>.npz` files are left in place and
+  no longer read; the first build after this change regenerates the
+  points once. A task's file name now changes whenever its tag does
+  (including model keys such as `hidden_size`), so tasks that differ
+  only in their network write identical points to separate files.
 - **A changed function definition is not detected.** If a loss function's
   code changes while its tag does not, the hash stays the same. This was
   true before, and is out of scope here.

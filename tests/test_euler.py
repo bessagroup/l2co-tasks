@@ -87,6 +87,12 @@ _EULER_ARGS = dict(
         {"num_res_points": 17},
         {"num_ic_points": 9},
         {"num_bc_points": 9},
+        {"x_range": (-2.0, 2.0)},
+        {"t_range": (0.0, 2.0)},
+        {"lam_ic": 2.0},
+        {"lam_bc": 2.0},
+        {"lam_f": 2.0},
+        {"lam_nu": 2.0},
     ],
 )
 def test_euler_hash_follows_every_argument_that_changes_the_task(

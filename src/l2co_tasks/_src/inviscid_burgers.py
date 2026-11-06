@@ -39,7 +39,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from functools import partial
-from pathlib import Path
 
 # Third-party
 import jax
@@ -49,7 +48,7 @@ from f3dasm import Block, ExperimentData
 from jaxtyping import Array, PyTree
 
 # Local
-from ._io import ensure_points_dataset
+from ._io import ensure_points_dataset, points_cache_path
 from .experimentdata import build_task_experimentdata
 from .models import mlp, multinet
 from .pde import mse
@@ -226,7 +225,6 @@ def create_inviscid_burgers_task(
     Task
         The created inviscid-Burgers task.
     """
-    _path = Path(dataset_path + f"_{seed}").with_suffix(".npz")
     key = jr.key(int(seed))
     u_key, f_key, dataset_key = jr.split(key, 3)
 
@@ -276,6 +274,9 @@ def create_inviscid_burgers_task(
     # Both sub-networks share the same architecture; record it once.
     tag.update(net_tags)
 
+    # The file is named by the tag, so other point arguments never
+    # reuse this task's points (ADR 0008).
+    _path = points_cache_path(dataset_path, tag)
     ensure_points_dataset(
         _path,
         lambda: create_points_dataset(

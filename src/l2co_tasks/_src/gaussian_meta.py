@@ -148,6 +148,8 @@ def create_gaussian_meta_task(
     tag["num_samples_per_gaussian"] = num_samples_per_gaussian
     tag["dim_points"] = dim_points
     tag["seed"] = seed
+    tag["inner_steps"] = inner_steps
+    tag["l2_regularization"] = float(l2_regularization)
 
     key = jr.key(seed)
     model_key, data_key = jr.split(key, 2)

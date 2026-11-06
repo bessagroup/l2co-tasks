@@ -90,7 +90,10 @@ _HELMHOLTZ_ARGS = dict(
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("changed", [{"seed": 1}, {"num_res_points": 17}])
+@pytest.mark.parametrize(
+    "changed",
+    [{"seed": 1}, {"num_res_points": 17}, {"x_range": (0.0, 2.0)}],
+)
 def test_helmholtz_hash_follows_every_argument_that_changes_the_task(
     tmp_path, changed
 ):

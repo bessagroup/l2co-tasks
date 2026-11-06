@@ -35,7 +35,6 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 from functools import partial
-from pathlib import Path
 
 # Third-party
 import equinox as eqx
@@ -46,7 +45,7 @@ from f3dasm import Block, ExperimentData
 from jaxtyping import Array, PyTree
 
 # Local
-from ._io import ensure_points_dataset
+from ._io import ensure_points_dataset, points_cache_path
 from .experimentdata import build_task_experimentdata
 from .models import mlp
 from .pde import mse
@@ -242,7 +241,6 @@ def create_stokes_task(
     Task
         The created Stokes-wedge task.
     """
-    _path = Path(dataset_path + f"_{seed}").with_suffix(".npz")
     key = jr.key(int(seed))
     model_key, dataset_key = jr.split(key)
 
@@ -272,6 +270,9 @@ def create_stokes_task(
     }
     tag.update(model_tags)
 
+    # The file is named by the tag, so other point arguments never
+    # reuse this task's points (ADR 0008).
+    _path = points_cache_path(dataset_path, tag)
     ensure_points_dataset(
         _path,
         lambda: create_points_dataset(
