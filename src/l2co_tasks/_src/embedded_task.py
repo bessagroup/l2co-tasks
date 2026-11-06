@@ -75,7 +75,7 @@ import jax.random as jr
 from jaxtyping import Array
 
 # Local
-from .benchmark_task import add_noise
+from .benchmark_task import noisy_losses
 from .task import Task
 
 #                                                          Authorship & Credits
@@ -199,12 +199,16 @@ def create_embedded_bbob_task(
         characteristics (``separable`` forced to ``False`` by the
         dense embedding) plus ``embedded``,
         ``intrinsic_dimensionality`` and ``bulk_scale``.
+        ``tag["noise"]`` is ``noise > 0`` (a bool, not the level); a
+        noisy task carries the loss without the noise in
+        ``loss_fn_true``.
 
     Raises
     ------
     ValueError
         If ``fn_name`` is not a BBOB-suite function, if
-        ``ambient_dim < intrinsic_dim``, or if ``bulk_scale < 0``.
+        ``ambient_dim < intrinsic_dim``, if ``bulk_scale < 0``, or if
+        ``noise`` is negative or NaN.
 
     Notes
     -----
@@ -247,12 +251,15 @@ def create_embedded_bbob_task(
         bulk_scale=float(bulk_scale),
     )
 
-    if noise > 0.0:
-        loss_fn = add_noise(noise_level=noise)(base_fn)
-        pass_rng = True
-    else:
-        loss_fn = base_fn
-        pass_rng = False
+    # BBOB only (checked above), so never noisy by itself: only added
+    # noise makes the task noisy, and base_fn is then its noise-free
+    # loss. The guard is what makes intrinsic=False right: admitting a
+    # noisy function would need more than intrinsic=problem.noisy, as
+    # compute_embedded_loss calls fn(z) without a key and the noise-free
+    # loss would have to embed problem.fn_true instead.
+    loss_fn, loss_fn_true, noisy = noisy_losses(
+        base_fn, base_fn, intrinsic=False, noise=noise
+    )
 
     tag = dict(problem.tags)
     tag["separable"] = False
@@ -262,12 +269,13 @@ def create_embedded_bbob_task(
     tag["bulk_scale"] = float(bulk_scale)
     tag["fn_name"] = fn_name
     tag["seed"] = seed
-    tag["noise"] = noise
+    tag["noise"] = noisy
 
     return Task(
         model=jnp.zeros(ambient_dim),
         global_min=float(problem.f_opt),
-        pass_rng=pass_rng,
+        pass_rng=noisy,
         loss_fn=loss_fn,
+        loss_fn_true=loss_fn_true,
         tag=tag,
     )

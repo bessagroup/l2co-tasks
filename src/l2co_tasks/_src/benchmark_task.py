@@ -13,12 +13,21 @@ BBOB-noisy, per-function bounds for CEC2005 and CEC 2013 LSGO,
 
 When ``noise > 0`` the objective is corrupted with multiplicative
 Gaussian noise, ``f(x) * (1 + e)`` with ``e ~ N(0, noise)``, which
-makes the loss stochastic (``pass_rng=True``). The CEC2005 functions
-``f4``, ``f17``, ``f24`` and ``f25`` are inherently stochastic and so
-always set ``pass_rng=True``, even with ``noise == 0``; the CEC2017
-suite has no stochastic functions. The BBOB-noisy suite is inherently
-stochastic throughout (its factory has no extra ``noise`` knob and
-requires a bbob-jax newer than 1.8.0).
+makes the loss stochastic. Some functions are stochastic by
+themselves, as bbob-jax's own ``noise`` characteristic records: the
+whole BBOB-noisy suite (its factory has no extra ``noise`` knob and
+requires a bbob-jax newer than 1.8.0) and the CEC2005 functions
+``f4``, ``f17``, ``f24`` and ``f25``; BBOB, CEC2017 and CEC 2013 LSGO
+have none. Adding noise to a function that is already noisy is
+refused.
+
+One rule, :func:`noisy_losses`, decides whether a task is noisy, and
+sets ``tag["noise"]`` (a bool; the added level is not recorded in the
+tag, so it is not part of the task's identity) and ``pass_rng`` alike.
+A noisy task also carries its noise-free loss, ``Task.loss_fn_true``:
+bbob-jax's ``Problem.fn_true`` for a function noisy by itself, the
+function without the noise wrapper for added noise, through the same
+input scaling as ``loss_fn``.
 
 The CEC 2013 LSGO suite is a *fixed-instance* suite: its parameters
 are official constants rather than seed-sampled, so ``seed`` selects no
@@ -59,6 +68,7 @@ CEC2019Sampler
 from __future__ import annotations
 
 import functools
+from collections.abc import Callable
 
 # Standard
 import bbob_jax
@@ -223,6 +233,65 @@ def add_noise(noise_level: float):
     return decorator
 
 
+def noisy_losses(
+    fn: Callable,
+    fn_true: Callable,
+    *,
+    intrinsic: bool,
+    noise: float,
+) -> tuple[Callable, Callable | None, bool]:
+    """Wire a benchmark function into a task's losses and noise flag.
+
+    The one rule every benchmark factory uses for both ``tag["noise"]``
+    and ``pass_rng``: a task is noisy when its function is noisy by
+    itself (bbob-jax's own ``noise`` characteristic, ``Problem.noisy``)
+    or when multiplicative noise is added (``noise > 0``). A noisy task
+    also gets its noise-free loss; a noise-free task gets ``None``.
+
+    Parameters
+    ----------
+    fn : Callable
+        The function as the task evaluates it, already mapped from the
+        unit box: ``fn(x, key)`` when ``intrinsic``, else ``fn(x)``.
+    fn_true : Callable
+        Its noise-free version through the same map, ``fn_true(x)``;
+        ``fn`` itself for a function that is not noisy by itself.
+    intrinsic : bool
+        Whether ``fn`` is noisy by itself.
+    noise : float
+        Level of the added multiplicative Gaussian noise, ``0`` for
+        none.
+
+    Returns
+    -------
+    loss_fn : Callable
+        ``fn``, wrapped by :func:`add_noise` when ``noise > 0``.
+    loss_fn_true : Callable or None
+        ``fn_true`` when the task is noisy, else ``None``.
+    noisy : bool
+        Whether the loss is stochastic: the value of both
+        ``tag["noise"]`` and ``pass_rng``.
+
+    Raises
+    ------
+    ValueError
+        If ``noise`` is negative or NaN, or if noise is added to a
+        function that is already noisy: :func:`add_noise` would use up
+        the key the function needs, and the tag could not tell the two
+        tasks apart.
+    """
+    if not noise >= 0.0:
+        raise ValueError(f"noise must be a level >= 0, got {noise!r}.")
+    if intrinsic and noise > 0.0:
+        raise ValueError(
+            "The function is already noisy by itself; adding noise "
+            f"(noise={noise!r}) on top of it is not supported."
+        )
+    noisy = bool(intrinsic) or bool(noise > 0.0)
+    loss_fn = add_noise(noise_level=noise)(fn) if noise > 0.0 else fn
+    return loss_fn, (fn_true if noisy else None), noisy
+
+
 def create_bbob_task(
     fn_name: str, seed: int, dimensionality: int, noise: float = 0.0
 ) -> Task:
@@ -244,7 +313,16 @@ def create_bbob_task(
     -------
     Task
         Configured optimization task with scaled and optionally noisy
-        objective function.
+        objective function. ``tag["noise"]`` is ``noise > 0`` (a bool,
+        not the level); a noisy task carries its noise-free loss in
+        ``loss_fn_true``.
+
+    Raises
+    ------
+    KeyError
+        If ``fn_name`` is not a BBOB function.
+    ValueError
+        If ``noise`` is negative or NaN.
 
     Notes
     -----
@@ -252,35 +330,39 @@ def create_bbob_task(
     [-5, 5]^d range. If noise > 0, the function requires a random
     key and applies multiplicative Gaussian noise.
     """
+    # problem() resolves names across every bbob-jax suite, so a CEC
+    # name would otherwise build a CEC function on BBOB's box.
+    if fn_name not in bbob_jax.registry:
+        raise KeyError(f"{fn_name!r} is not a BBOB function")
+
     fn_scale_input = scale_input(
         domain_bounds=jnp.tile(jnp.array([0.0, 1.0]), (dimensionality, 1)),
         function_bounds=jnp.tile(jnp.array([-5.0, 5.0]), (dimensionality, 1)),
     )
 
-    if noise > 0.0:
-        fn_noise = add_noise(noise_level=noise)
-        pass_rng = True
-    else:
-        fn_noise = lambda f: f
-        pass_rng = False
-
-    bbob_fn, global_min = bbob_jax.registry[fn_name](
-        ndim=dimensionality, key=jr.key(seed)
+    # problem() builds the same instance the registry would, plus the
+    # noise-free function and bbob-jax's own noise flag.
+    problem = bbob_jax.problem(fn_name, ndim=dimensionality, key=jr.key(seed))
+    loss_fn, loss_fn_true, noisy = noisy_losses(
+        fn_scale_input(problem.fn),
+        fn_scale_input(problem.fn_true),
+        intrinsic=problem.noisy,
+        noise=noise,
     )
 
-    loss_fn = fn_noise(fn_scale_input(bbob_fn))
     model = jnp.zeros(dimensionality)
     tag = bbob_jax.function_characteristics[fn_name].copy()
     tag["dimensionality"] = dimensionality
     tag["fn_name"] = fn_name
     tag["seed"] = seed
-    tag["noise"] = noise
+    tag["noise"] = noisy
 
     return Task(
         model=model,
-        global_min=float(global_min),
-        pass_rng=pass_rng,
+        global_min=float(problem.f_opt),
+        pass_rng=noisy,
         loss_fn=loss_fn,
+        loss_fn_true=loss_fn_true,
         tag=tag,
     )
 
@@ -316,21 +398,27 @@ def create_bbob_noisy_task(
         ``bbob_jax`` characteristics: ``separable`` / ``unimodal``
         describe the undisturbed base function, and the noise model is
         recorded in the ``gaussian_noise`` / ``uniform_noise`` /
-        ``cauchy_noise`` / ``severe`` / ``noise`` flags.
+        ``cauchy_noise`` / ``severe`` / ``noise`` flags. ``loss_fn_true``
+        is the undisturbed value, bbob-jax's ``fn_true``, on the same
+        unit box.
 
     Raises
     ------
     ImportError
         If the installed ``bbob-jax`` predates the BBOB-noisy suite
         (releases up to 1.8.0 do not include it).
+    KeyError
+        If ``fn_name`` is not a BBOB-noisy function.
 
     Notes
     -----
     Input domain is [0, 1]^d which is scaled to the suite's standard
     [-5, 5]^d range. ``global_min`` is the instance's ``f_opt``: the
-    infimum of the *undisturbed* value. The Cauchy noise model is
-    signed and heavy-tailed, so observed noisy values can dip below
-    it.
+    infimum of the *undisturbed* value. The noise never takes a value
+    below it: every noise model disturbs only the non-negative residual
+    above the optimum and keeps it non-negative (the Cauchy model adds
+    a non-negative term). Gaussian and uniform noise can still give a
+    value below the undisturbed one; Cauchy noise never does.
     """
     registry = getattr(bbob_jax, "bbob_noisy_registry", None)
     if registry is None:
@@ -340,27 +428,39 @@ def create_bbob_noisy_task(
             "1.8.0 do not include it. Upgrade bbob-jax."
         )
 
+    # problem() resolves names across every bbob-jax suite; keep a
+    # noiseless name from building a noiseless task here.
+    if fn_name not in registry:
+        raise KeyError(f"{fn_name!r} is not a BBOB-noisy function")
+
     fn_scale_input = scale_input(
         domain_bounds=jnp.tile(jnp.array([0.0, 1.0]), (dimensionality, 1)),
         function_bounds=jnp.tile(jnp.array([-5.0, 5.0]), (dimensionality, 1)),
     )
 
-    noisy_fn, global_min = registry[fn_name](
-        ndim=dimensionality, key=jr.key(seed)
+    # problem() builds the same instance the registry would, plus the
+    # noise-free function.
+    problem = bbob_jax.problem(fn_name, ndim=dimensionality, key=jr.key(seed))
+    loss_fn, loss_fn_true, noisy = noisy_losses(
+        fn_scale_input(problem.fn),
+        fn_scale_input(problem.fn_true),
+        intrinsic=problem.noisy,
+        noise=0.0,
     )
 
-    loss_fn = fn_scale_input(noisy_fn)
     model = jnp.zeros(dimensionality)
     tag = bbob_jax.bbob_noisy_function_characteristics[fn_name].copy()
     tag["dimensionality"] = dimensionality
     tag["fn_name"] = fn_name
     tag["seed"] = seed
+    tag["noise"] = noisy
 
     return Task(
         model=model,
-        global_min=float(global_min),
-        pass_rng=True,
+        global_min=float(problem.f_opt),
+        pass_rng=noisy,
         loss_fn=loss_fn,
+        loss_fn_true=loss_fn_true,
         tag=tag,
     )
 
@@ -386,7 +486,18 @@ def create_cec2005_task(
     -------
     Task
         Configured optimization task with scaled and optionally noisy
-        objective function.
+        objective function. ``tag["noise"]`` is True for ``f4``,
+        ``f17``, ``f24`` and ``f25`` (noisy by themselves, by bbob-jax's
+        own characteristic) and for ``noise > 0``; a noisy task carries
+        its noise-free loss in ``loss_fn_true``.
+
+    Raises
+    ------
+    KeyError
+        If ``fn_name`` is not a CEC2005 function.
+    ValueError
+        If ``noise`` is negative or NaN, or positive on a function that
+        is already noisy.
 
     Notes
     -----
@@ -403,34 +514,30 @@ def create_cec2005_task(
         ),
     )
 
-    if noise > 0.0:
-        fn_noise = add_noise(noise_level=noise)
-        pass_rng = True
-    else:
-        fn_noise = lambda f: f
-        pass_rng = False
-
-    # These functions have built-in stochasticity.
-    if fn_name in ["f4", "f17", "f24", "f25"]:
-        pass_rng = True
-
-    bbob_fn, global_min = bbob_jax.cec2005_registry[fn_name](
-        ndim=dimensionality, key=jr.key(seed)
+    # problem() builds the same instance the registry would, plus the
+    # noise-free function and bbob-jax's own noise flag (True for f4,
+    # f17, f24 and f25).
+    problem = bbob_jax.problem(fn_name, ndim=dimensionality, key=jr.key(seed))
+    loss_fn, loss_fn_true, noisy = noisy_losses(
+        fn_scale_input(problem.fn),
+        fn_scale_input(problem.fn_true),
+        intrinsic=problem.noisy,
+        noise=noise,
     )
 
-    loss_fn = fn_noise(fn_scale_input(bbob_fn))
     model = jnp.zeros(dimensionality)
     tag = bbob_jax.cec2005_function_characteristics[fn_name].copy()
     tag["dimensionality"] = dimensionality
     tag["fn_name"] = fn_name
     tag["seed"] = seed
-    tag["noise"] = noise
+    tag["noise"] = noisy
 
     return Task(
         model=model,
-        global_min=float(global_min),
-        pass_rng=pass_rng,
+        global_min=float(problem.f_opt),
+        pass_rng=noisy,
         loss_fn=loss_fn,
+        loss_fn_true=loss_fn_true,
         tag=tag,
     )
 
@@ -485,31 +592,30 @@ def create_cec2017_task(
         ),
     )
 
-    if noise > 0.0:
-        fn_noise = add_noise(noise_level=noise)
-        pass_rng = True
-    else:
-        fn_noise = lambda f: f
-        pass_rng = False
-
     # problem() bundles the same instance the registry would build,
     # plus min_ndim (and raises ValueError below it).
     problem = bbob_jax.problem(fn_name, ndim=dimensionality, key=jr.key(seed))
+    loss_fn, loss_fn_true, noisy = noisy_losses(
+        fn_scale_input(problem.fn),
+        fn_scale_input(problem.fn_true),
+        intrinsic=problem.noisy,
+        noise=noise,
+    )
 
-    loss_fn = fn_noise(fn_scale_input(problem.fn))
     model = jnp.zeros(dimensionality)
     tag = dict(problem.tags)
     tag["min_ndim"] = problem.min_ndim
     tag["dimensionality"] = dimensionality
     tag["fn_name"] = fn_name
     tag["seed"] = seed
-    tag["noise"] = noise
+    tag["noise"] = noisy
 
     return Task(
         model=model,
         global_min=float(problem.f_opt),
-        pass_rng=pass_rng,
+        pass_rng=noisy,
         loss_fn=loss_fn,
+        loss_fn_true=loss_fn_true,
         tag=tag,
     )
 
@@ -613,26 +719,26 @@ def create_cec2013lsgo_task(
         ),
     )
 
-    if noise > 0.0:
-        fn_noise = add_noise(noise_level=noise)
-        pass_rng = True
-    else:
-        fn_noise = lambda f: f
-        pass_rng = False
+    loss_fn, loss_fn_true, noisy = noisy_losses(
+        fn_scale_input(problem.fn),
+        fn_scale_input(problem.fn_true),
+        intrinsic=problem.noisy,
+        noise=noise,
+    )
 
-    loss_fn = fn_noise(fn_scale_input(problem.fn))
     model = jnp.zeros(dimensionality)
     tag = dict(problem.tags)
     tag["min_ndim"] = problem.min_ndim
     tag["dimensionality"] = dimensionality
     tag["fn_name"] = fn_name
     tag["seed"] = seed
-    tag["noise"] = noise
+    tag["noise"] = noisy
 
     return Task(
         model=model,
         global_min=float(problem.f_opt),
-        pass_rng=pass_rng,
+        pass_rng=noisy,
         loss_fn=loss_fn,
+        loss_fn_true=loss_fn_true,
         tag=tag,
     )

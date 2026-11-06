@@ -196,6 +196,17 @@ class Task(eqx.Module):
         :class:`Box` given as single numbers is cast to the model's
         parameters. Constraints are part of the task's identity only
         when present, so an unconstrained task's ``hash`` is unchanged.
+    loss_fn_true : Callable or None
+        The noise-free loss of a task whose loss is stochastic, or
+        ``None`` (the default). It takes the arguments of ``loss_fn``
+        without the ``key`` and returns the value ``loss_fn`` would give
+        without its noise, so a noisy run can be scored on it. Setting
+        it requires ``pass_rng``. It is saved only when set and is never
+        part of the task's identity: it follows from the tag, so a
+        task without it has the same ``hash`` and file as before the
+        field existed. It is pickled apart from ``loss_fn``, so it
+        repeats the instance arrays ``loss_fn`` holds: a noisy task's
+        file header is about twice the size of its noise-free twin's.
     """
 
     model: PyTree
@@ -206,9 +217,21 @@ class Task(eqx.Module):
     dataset: DatasetDict | None = eqx.field(default=None, static=True)
     tag: dict[str, Any] = eqx.field(default_factory=dict, static=True)
     constraints: tuple[Constraint, ...] = ()
+    loss_fn_true: Callable | None = eqx.field(static=True, default=None)
 
     def __post_init__(self):
         self.constraints = resolve_constraints(self.model, self.constraints)
+        if self.loss_fn_true is not None:
+            if not callable(self.loss_fn_true):
+                raise TypeError(
+                    "loss_fn_true must be callable or None, got "
+                    f"{type(self.loss_fn_true).__name__}."
+                )
+            if not self.pass_rng:
+                raise ValueError(
+                    "loss_fn_true is the noise-free loss of a stochastic "
+                    "loss, so it needs pass_rng=True."
+                )
 
     @property
     def loaded_dataset(self) -> dict[str, Any]:
@@ -388,6 +411,11 @@ class Task(eqx.Module):
             if "constraints" in hyperparams
             else ()
         )
+        loss_fn_true = (
+            cloudpickle.loads(bytes.fromhex(hyperparams["loss_fn_true"]))
+            if "loss_fn_true" in hyperparams
+            else None
+        )
         return cls(
             model=model,
             loss_fn=loss_fn,
@@ -397,6 +425,7 @@ class Task(eqx.Module):
             dataset=hyperparams.get("dataset"),
             tag=hyperparams.get("tag", {}),
             constraints=constraints,
+            loss_fn_true=loss_fn_true,
         )
 
     @staticmethod
@@ -406,9 +435,9 @@ class Task(eqx.Module):
 
         The file format mirrors :class:`Stage1Loader`: the first line is a
         UTF-8 JSON header containing all metadata (loss function, dataset
-        reference, tags, model shape, and the constraints if there are
-        any), followed immediately by the binary leaf data written by
-        ``eqx.tree_serialise_leaves``.  The dataset
+        reference, tags, model shape, and the constraints and noise-free
+        loss if there are any), followed immediately by the binary leaf
+        data written by ``eqx.tree_serialise_leaves``.  The dataset
         ``.npz`` file is **not** copied — only its path is stored in the
         header, so the dataset is stored only once on disk.
 
@@ -484,6 +513,13 @@ class Task(eqx.Module):
         # byte-for-byte what it was before constraints existed.
         if self.constraints:
             header["constraints"] = cloudpickle.dumps(self.constraints).hex()
+        # Likewise, so a noise-free task's file is unchanged by the field.
+        # Pickled apart from loss_fn, it repeats loss_fn's instance arrays
+        # and doubles the header (bbob_noisy_f122 at 256 dimensions: 3.17
+        # to 6.34 MB); one pickle of both would not, but would change the
+        # header's keys.
+        if self.loss_fn_true is not None:
+            header["loss_fn_true"] = cloudpickle.dumps(self.loss_fn_true).hex()
         return header
 
     @classmethod
