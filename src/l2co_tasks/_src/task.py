@@ -83,6 +83,59 @@ class _SortedFrozenset(frozenset):
         return "frozenset({" + ", ".join(sorted(map(repr, self))) + "})"
 
 
+def _make_hashable(value: Any) -> Any:
+    """Recursively convert lists to tuples and dicts to frozensets.
+
+    Dicts and frozensets become :class:`_SortedFrozenset`, whose printed
+    form does not depend on ``PYTHONHASHSEED``.
+
+    Parameters
+    ----------
+    value : Any
+        Value to convert.
+
+    Returns
+    -------
+    Any
+        Hashable value.
+    """
+    if isinstance(value, list):
+        return tuple(_make_hashable(v) for v in value)
+    elif isinstance(value, dict):
+        return _SortedFrozenset(
+            (k, _make_hashable(v)) for k, v in value.items()
+        )
+    elif isinstance(value, frozenset):
+        return _SortedFrozenset(_make_hashable(v) for v in value)
+    # Leave other types unchanged
+    return value
+
+
+def _digest(identity: frozenset) -> str:
+    """Short sha256 of an identity set, the same in every process."""
+    return hashlib.sha256(str(sorted(identity)).encode()).hexdigest()[:16]
+
+
+def tag_digest(tag: dict[str, Any]) -> str:
+    """Short sha256 of a tag alone, computed as :attr:`Task.hash` does.
+
+    For a task without constraints this equals its :attr:`Task.hash`.
+
+    Parameters
+    ----------
+    tag : dict[str, Any]
+        A task's tag.
+
+    Returns
+    -------
+    str
+        16-character hash string.
+    """
+    return _digest(
+        frozenset({k: _make_hashable(v) for k, v in tag.items()}.items())
+    )
+
+
 class _PickledShapeDtypeStruct:
     """What a pickled ``jax.ShapeDtypeStruct`` loads as, before it is rebuilt.
 
@@ -305,35 +358,7 @@ class Task(eqx.Module):
             in sorted order, so :attr:`hash` is the same in every process.
         """
 
-        def make_hashable(value):
-            """
-            Recursively convert lists to tuples and dicts to frozensets.
-
-            Dicts and frozensets become :class:`_SortedFrozenset`, whose
-            printed form does not depend on ``PYTHONHASHSEED``.
-
-            Parameters
-            ----------
-            value : Any
-                Value to convert.
-
-            Returns
-            -------
-            Any
-                Hashable value.
-            """
-            if isinstance(value, list):
-                return tuple(make_hashable(v) for v in value)
-            elif isinstance(value, dict):
-                return _SortedFrozenset(
-                    (k, make_hashable(v)) for k, v in value.items()
-                )
-            elif isinstance(value, frozenset):
-                return _SortedFrozenset(make_hashable(v) for v in value)
-            # Leave other types unchanged
-            return value
-
-        tag_hashable = {k: make_hashable(v) for k, v in self.tag.items()}
+        tag_hashable = {k: _make_hashable(v) for k, v in self.tag.items()}
 
         # global_min is not part of identity: an estimated minimum can be
         # corrected without changing which task it is (ADR 0008).
@@ -361,8 +386,7 @@ class Task(eqx.Module):
         str
             16-character hash string.
         """
-        t = sorted(self.tag_hashable)
-        return hashlib.sha256(str(t).encode()).hexdigest()[:16]
+        return _digest(self.tag_hashable)
 
     @staticmethod
     def _reconstruct_model_skeleton(hyperparams: dict):

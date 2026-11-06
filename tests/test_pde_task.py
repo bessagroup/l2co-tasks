@@ -105,6 +105,9 @@ _PDE_ARGS = dict(
         {"num_ic_points": 5},
         {"num_bc_points": 5},
         {"num_res_points": 9},
+        {"x_range": (0.0, 2.0)},
+        {"t_range": (0.0, 2.0)},
+        {"hidden_size": 5},
     ],
 )
 def test_pde_hash_follows_every_argument_that_changes_the_task(
