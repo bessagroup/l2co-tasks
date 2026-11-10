@@ -1,0 +1,63 @@
+# MetaBox bbob-10D 'difficult' training split, one instance per function:
+# BBOB F1 F2 F3 F5 F15 F16 F17 F21, all at 10-D, instance seed 0. This is
+# the metabbo-jax training set for the shared trainer experiment
+# (l2co_experiments `rl2co_train` with `trainer=metabbo`).
+#
+# Provenance: the `train_functions` list in l2co_experiments
+# conf/base_metabbo_train.yaml (branch feature/metabbo-train-pipeline),
+# which built each task with
+# `create_bbob_task(fn_name, seed=0, dimensionality=10)`. The rows below
+# reproduce that list in the same order, under bbob-jax function names
+# (including its `seperable` spelling).
+#
+# The tasks are listed explicitly as `input_data` rows; the rows are
+# consumed verbatim, so the sampler below is a no-op (`random` at
+# `n_samples: 0` appends nothing).
+#
+#   8 explicit rows = 8 tasks.
+sampler:
+  _target_: f3dasm.create_sampler
+  sampler: "random"  # identity: n_samples=0 appends no rows
+sampler_kwargs:
+  n_samples: 0
+
+experimentdata:
+  # One row per task: (fn_name, dimensionality, seed).
+  input_data:
+    - fn_name: 'sphere'                    # F1
+      dimensionality: 10
+      seed: 0
+    - fn_name: 'ellipsoid_seperable'       # F2
+      dimensionality: 10
+      seed: 0
+    - fn_name: 'rastrigin_seperable'       # F3
+      dimensionality: 10
+      seed: 0
+    - fn_name: 'linear_slope'              # F5
+      dimensionality: 10
+      seed: 0
+    - fn_name: 'rastrigin'                 # F15
+      dimensionality: 10
+      seed: 0
+    - fn_name: 'weierstrass'               # F16
+      dimensionality: 10
+      seed: 0
+    - fn_name: 'schaffer_f7_condition_10'  # F17
+      dimensionality: 10
+      seed: 0
+    - fn_name: 'gallagher_101_peaks'       # F21
+      dimensionality: 10
+      seed: 0
+
+task_kwargs:  # Extra keyword args forwarded to the task factory (null = none)
+
+data_generator:
+  # Factory function that creates a Task object from each ExperimentData row
+  _target_: l2co_tasks.create_bbob_task
+  _partial_: True
+
+schema:
+  # Feature schema used by FeatureProcessor to encode task metadata for the model
+  dimensionality: continuous
+  separable: boolean
+  unimodal: boolean
