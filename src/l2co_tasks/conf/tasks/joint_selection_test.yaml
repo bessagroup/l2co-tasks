@@ -1,36 +1,39 @@
 # joint_selection_test -- the DATASET benchmark's test set:
 # 100 problems from five suites on which choosing the best of four
 # optimizers per problem clearly beats the best single optimizer
-# (DATASET paper, Sections 3.3-3.4).
+# (DATASET paper, Sections 3.3-4.1), on the re-run's databank
+# (databank_2026_11: starts uniform in the box, evaluation budget
+# min(10^3 d, 10^5)).
 #
-# 100 tasks (bbob: 17, bbob_embedded: 39, bbob_noisy: 25, cec2005: 12, cec2017: 7).
+# 100 tasks (bbob: 16, bbob_embedded: 38, bbob_noisy: 32, cec2005: 5, cec2017: 9).
 #
 # Selection (l2co_experiments experiments/joint_selection, run of
-# 2026-10-27; /oscar/data/mbessa/mvander7/joint_selection/
-# 2026-10-27_seed0_n100/main/test.json):
+# 2026-11-14; /oscar/data/mbessa/mvander7/joint_selection/
+#   2026-11-14_rerun_fixed_portfolio/main/test.json):
 #   * pool: seed 0 of every configuration of bbob, bbob_noisy, bbob_embedded
 #     (64 and 1024 ambient dimensions), cec2005 and cec2017, 678 problems,
 #     split by base landscape (ADR 0007) into two halves of 339;
-#   * this half: the portfolio was fixed by joint_selection_train; only
-#     the problems were chosen, at the same N = 100, maximising Delta,
-#     so this half never influenced the portfolio.
+#   * this half: the portfolio is the training half's, held fixed; the problems were
+#     chosen for it under the same constraints at a fixed N = 100.
 #   * u = normalised ERTD AUC over log10 evaluations per dimension, 0.1 to
-#     1e5 (six decades; u_matrix.csv sha256 bb29ec8d...). Delta = mean
-#     over the problems of the portfolio's per-problem best (VBS) minus
-#     the best mean of any single one of the 60 candidates (SBS).
-#   * constraints: floor Delta >= 1/6 (choosing within the portfolio is
-#     ~10x cheaper than the SBS); balance, no member more than 0.06 above
-#     the members' mean (~2.3x); separation, on every problem the best
+#     2.5e4 (5.4 decades; u_matrix.csv sha256 995903c5...), with the
+#     overhead rule: u = 0 for a cell over 0.5 s per step (25 runs, after a
+#     300 s start-up allowance), i.e. the five full-covariance candidates at
+#     d = 1024. Delta = mean over the problems of the portfolio's
+#     per-problem best (VBS) minus the best mean of any single one of the
+#     60 candidates (SBS).
+#   * constraints: floor Delta >= 1/6; balance, no member more than 0.06
+#     above the members' mean; separation, on every problem the best
 #     member beats the members' mean by >= 0.02; no per-suite minimum.
 #
-# Achieved on this half: N = 100 of 339, Delta = 0.2294
-# (proven optimal); VBS = 0.5237, SBS = lbfgs 0.2943.
+# Achieved on this half: N = 100 of 339, Delta = 0.2477
+# (proven optimal for this portfolio); VBS = 0.5388, SBS = lbfgs 0.2911.
 # Portfolio:
-#   crfmnes
-#   adafactor
-#   sgd_learning_rate=0.001
+#   crfmnes_std_init=0.2
+#   mr15ga_std_init=0.2
+#   rprop_learning_rate=0.01
 #   lbfgs
-# Problems won (crfmnes, adafactor, sgd, lbfgs): 38 / 25 / 8 / 29.
+# Problems won (crfmnes, mr15ga, rprop, lbfgs): 33 / 16 / 28 / 23.
 #
 # Functions are disjoint from joint_selection_train: every base landscape lies in
 # one half only. Seeds 1-3 of the same configurations are not in this
@@ -47,83 +50,81 @@ sampler_kwargs:
   n_samples: 0
 
 parts:
-  # bbob: 17 tasks
+  # bbob: 16 tasks
   - data_generator:
       _target_: l2co_tasks.create_bbob_task
       _partial_: True
     task_kwargs:
     input_data:
-      - {fn_name: bent_cigar, dimensionality: 10, seed: 0}
-      - {fn_name: ellipsoid_seperable, dimensionality: 2, seed: 0}
-      - {fn_name: ellipsoid_seperable, dimensionality: 3, seed: 0}
+      - {fn_name: attractive_sector, dimensionality: 10, seed: 0}
       - {fn_name: ellipsoid_seperable, dimensionality: 5, seed: 0}
       - {fn_name: ellipsoid_seperable, dimensionality: 10, seed: 0}
       - {fn_name: ellipsoid_seperable, dimensionality: 20, seed: 0}
       - {fn_name: ellipsoid_seperable, dimensionality: 40, seed: 0}
-      - {fn_name: rosenbrock_rotated, dimensionality: 3, seed: 0}
+      - {fn_name: rosenbrock_rotated, dimensionality: 40, seed: 0}
       - {fn_name: schaffer_f7_condition_10, dimensionality: 2, seed: 0}
       - {fn_name: schaffer_f7_condition_10, dimensionality: 3, seed: 0}
       - {fn_name: schaffer_f7_condition_10, dimensionality: 5, seed: 0}
-      - {fn_name: schaffer_f7_condition_10, dimensionality: 10, seed: 0}
-      - {fn_name: schaffer_f7_condition_1000, dimensionality: 2, seed: 0}
       - {fn_name: schaffer_f7_condition_1000, dimensionality: 3, seed: 0}
       - {fn_name: step_ellipsoid, dimensionality: 2, seed: 0}
       - {fn_name: step_ellipsoid, dimensionality: 3, seed: 0}
+      - {fn_name: step_ellipsoid, dimensionality: 5, seed: 0}
       - {fn_name: weierstrass, dimensionality: 2, seed: 0}
-  # bbob_embedded: 39 tasks
+      - {fn_name: weierstrass, dimensionality: 3, seed: 0}
+      - {fn_name: weierstrass, dimensionality: 5, seed: 0}
+  # bbob_embedded: 38 tasks
   - data_generator:
       _target_: l2co_tasks.create_embedded_bbob_task
       _partial_: True
     task_kwargs:
       bulk_scale: 0.0
     input_data:
+      - {fn_name: attractive_sector, intrinsic_dim: 10, ambient_dim: 64, seed: 0}
+      - {fn_name: attractive_sector, intrinsic_dim: 10, ambient_dim: 1024, seed: 0}
       - {fn_name: attractive_sector, intrinsic_dim: 40, ambient_dim: 1024, seed: 0}
-      - {fn_name: discuss, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
-      - {fn_name: discuss, intrinsic_dim: 10, ambient_dim: 64, seed: 0}
-      - {fn_name: discuss, intrinsic_dim: 40, ambient_dim: 64, seed: 0}
-      - {fn_name: discuss, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
-      - {fn_name: discuss, intrinsic_dim: 5, ambient_dim: 1024, seed: 0}
-      - {fn_name: discuss, intrinsic_dim: 10, ambient_dim: 1024, seed: 0}
-      - {fn_name: discuss, intrinsic_dim: 40, ambient_dim: 1024, seed: 0}
-      - {fn_name: ellipsoid, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
-      - {fn_name: ellipsoid, intrinsic_dim: 10, ambient_dim: 64, seed: 0}
-      - {fn_name: ellipsoid, intrinsic_dim: 40, ambient_dim: 64, seed: 0}
-      - {fn_name: ellipsoid, intrinsic_dim: 5, ambient_dim: 1024, seed: 0}
-      - {fn_name: ellipsoid, intrinsic_dim: 10, ambient_dim: 1024, seed: 0}
-      - {fn_name: ellipsoid, intrinsic_dim: 40, ambient_dim: 1024, seed: 0}
-      - {fn_name: ellipsoid_seperable, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
-      - {fn_name: ellipsoid_seperable, intrinsic_dim: 10, ambient_dim: 64, seed: 0}
-      - {fn_name: ellipsoid_seperable, intrinsic_dim: 40, ambient_dim: 64, seed: 0}
-      - {fn_name: ellipsoid_seperable, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
-      - {fn_name: ellipsoid_seperable, intrinsic_dim: 10, ambient_dim: 1024, seed: 0}
-      - {fn_name: ellipsoid_seperable, intrinsic_dim: 40, ambient_dim: 1024, seed: 0}
+      - {fn_name: bent_cigar, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
+      - {fn_name: bent_cigar, intrinsic_dim: 40, ambient_dim: 64, seed: 0}
+      - {fn_name: bent_cigar, intrinsic_dim: 5, ambient_dim: 1024, seed: 0}
+      - {fn_name: bent_cigar, intrinsic_dim: 10, ambient_dim: 1024, seed: 0}
+      - {fn_name: bent_cigar, intrinsic_dim: 40, ambient_dim: 1024, seed: 0}
+      - {fn_name: rosenbrock, intrinsic_dim: 10, ambient_dim: 64, seed: 0}
+      - {fn_name: rosenbrock, intrinsic_dim: 40, ambient_dim: 64, seed: 0}
+      - {fn_name: rosenbrock, intrinsic_dim: 5, ambient_dim: 1024, seed: 0}
+      - {fn_name: rosenbrock, intrinsic_dim: 10, ambient_dim: 1024, seed: 0}
+      - {fn_name: rosenbrock, intrinsic_dim: 40, ambient_dim: 1024, seed: 0}
+      - {fn_name: rosenbrock_rotated, intrinsic_dim: 10, ambient_dim: 64, seed: 0}
+      - {fn_name: rosenbrock_rotated, intrinsic_dim: 5, ambient_dim: 1024, seed: 0}
+      - {fn_name: rosenbrock_rotated, intrinsic_dim: 10, ambient_dim: 1024, seed: 0}
+      - {fn_name: rosenbrock_rotated, intrinsic_dim: 40, ambient_dim: 1024, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
       - {fn_name: schaffer_f7_condition_10, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
       - {fn_name: schaffer_f7_condition_10, intrinsic_dim: 10, ambient_dim: 64, seed: 0}
-      - {fn_name: schaffer_f7_condition_10, intrinsic_dim: 40, ambient_dim: 64, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
       - {fn_name: schaffer_f7_condition_10, intrinsic_dim: 5, ambient_dim: 1024, seed: 0}
-      - {fn_name: schaffer_f7_condition_10, intrinsic_dim: 10, ambient_dim: 1024, seed: 0}
-      - {fn_name: schaffer_f7_condition_10, intrinsic_dim: 40, ambient_dim: 1024, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
       - {fn_name: schaffer_f7_condition_1000, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
       - {fn_name: schaffer_f7_condition_1000, intrinsic_dim: 10, ambient_dim: 64, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
       - {fn_name: schaffer_f7_condition_1000, intrinsic_dim: 5, ambient_dim: 1024, seed: 0}
-      - {fn_name: schaffer_f7_condition_1000, intrinsic_dim: 10, ambient_dim: 1024, seed: 0}
-      - {fn_name: schaffer_f7_condition_1000, intrinsic_dim: 40, ambient_dim: 1024, seed: 0}
+      - {fn_name: step_ellipsoid, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
       - {fn_name: step_ellipsoid, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
       - {fn_name: step_ellipsoid, intrinsic_dim: 10, ambient_dim: 64, seed: 0}
       - {fn_name: step_ellipsoid, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
       - {fn_name: step_ellipsoid, intrinsic_dim: 5, ambient_dim: 1024, seed: 0}
-      - {fn_name: step_ellipsoid, intrinsic_dim: 10, ambient_dim: 1024, seed: 0}
+      - {fn_name: step_ellipsoid, intrinsic_dim: 40, ambient_dim: 1024, seed: 0}
+      - {fn_name: weierstrass, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
       - {fn_name: weierstrass, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
       - {fn_name: weierstrass, intrinsic_dim: 10, ambient_dim: 64, seed: 0}
-      - {fn_name: weierstrass, intrinsic_dim: 10, ambient_dim: 1024, seed: 0}
-  # bbob_noisy: 25 tasks
+      - {fn_name: weierstrass, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
+      - {fn_name: weierstrass, intrinsic_dim: 5, ambient_dim: 1024, seed: 0}
+  # bbob_noisy: 32 tasks
   - data_generator:
       _target_: l2co_tasks.create_bbob_noisy_task
       _partial_: True
     task_kwargs:
     input_data:
-      - {fn_name: bbob_noisy_f110, dimensionality: 2, seed: 0}
-      - {fn_name: bbob_noisy_f110, dimensionality: 3, seed: 0}
+      - {fn_name: bbob_noisy_f104, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f105, dimensionality: 40, seed: 0}
       - {fn_name: bbob_noisy_f110, dimensionality: 5, seed: 0}
       - {fn_name: bbob_noisy_f110, dimensionality: 10, seed: 0}
       - {fn_name: bbob_noisy_f110, dimensionality: 20, seed: 0}
@@ -134,38 +135,38 @@ parts:
       - {fn_name: bbob_noisy_f111, dimensionality: 40, seed: 0}
       - {fn_name: bbob_noisy_f113, dimensionality: 2, seed: 0}
       - {fn_name: bbob_noisy_f113, dimensionality: 3, seed: 0}
+      - {fn_name: bbob_noisy_f114, dimensionality: 2, seed: 0}
+      - {fn_name: bbob_noisy_f115, dimensionality: 2, seed: 0}
+      - {fn_name: bbob_noisy_f115, dimensionality: 3, seed: 0}
+      - {fn_name: bbob_noisy_f115, dimensionality: 5, seed: 0}
       - {fn_name: bbob_noisy_f116, dimensionality: 2, seed: 0}
       - {fn_name: bbob_noisy_f116, dimensionality: 3, seed: 0}
       - {fn_name: bbob_noisy_f116, dimensionality: 5, seed: 0}
       - {fn_name: bbob_noisy_f116, dimensionality: 10, seed: 0}
       - {fn_name: bbob_noisy_f116, dimensionality: 20, seed: 0}
       - {fn_name: bbob_noisy_f116, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f117, dimensionality: 2, seed: 0}
+      - {fn_name: bbob_noisy_f117, dimensionality: 3, seed: 0}
       - {fn_name: bbob_noisy_f117, dimensionality: 5, seed: 0}
       - {fn_name: bbob_noisy_f117, dimensionality: 10, seed: 0}
       - {fn_name: bbob_noisy_f117, dimensionality: 20, seed: 0}
       - {fn_name: bbob_noisy_f117, dimensionality: 40, seed: 0}
-      - {fn_name: bbob_noisy_f118, dimensionality: 20, seed: 0}
-      - {fn_name: bbob_noisy_f118, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f122, dimensionality: 2, seed: 0}
       - {fn_name: bbob_noisy_f122, dimensionality: 3, seed: 0}
-  # cec2005: 12 tasks
+      - {fn_name: bbob_noisy_f124, dimensionality: 2, seed: 0}
+      - {fn_name: bbob_noisy_f124, dimensionality: 3, seed: 0}
+  # cec2005: 5 tasks
   - data_generator:
       _target_: l2co_tasks.create_cec2005_task
       _partial_: True
     task_kwargs:
     input_data:
+      - {fn_name: f2, dimensionality: 30, seed: 0}
       - {fn_name: f2, dimensionality: 50, seed: 0}
-      - {fn_name: f3, dimensionality: 30, seed: 0}
-      - {fn_name: f3, dimensionality: 50, seed: 0}
-      - {fn_name: f4, dimensionality: 10, seed: 0}
+      - {fn_name: f3, dimensionality: 10, seed: 0}
       - {fn_name: f4, dimensionality: 30, seed: 0}
       - {fn_name: f4, dimensionality: 50, seed: 0}
-      - {fn_name: f16, dimensionality: 10, seed: 0}
-      - {fn_name: f17, dimensionality: 10, seed: 0}
-      - {fn_name: f20, dimensionality: 30, seed: 0}
-      - {fn_name: f25, dimensionality: 10, seed: 0}
-      - {fn_name: f25, dimensionality: 30, seed: 0}
-      - {fn_name: f25, dimensionality: 50, seed: 0}
-  # cec2017: 7 tasks
+  # cec2017: 9 tasks
   - data_generator:
       _target_: l2co_tasks.create_cec2017_task
       _partial_: True
@@ -174,6 +175,8 @@ parts:
       - {fn_name: cec2017_f1, dimensionality: 10, seed: 0}
       - {fn_name: cec2017_f1, dimensionality: 30, seed: 0}
       - {fn_name: cec2017_f1, dimensionality: 50, seed: 0}
+      - {fn_name: cec2017_f4, dimensionality: 30, seed: 0}
+      - {fn_name: cec2017_f4, dimensionality: 50, seed: 0}
       - {fn_name: cec2017_f6, dimensionality: 10, seed: 0}
       - {fn_name: cec2017_f9, dimensionality: 10, seed: 0}
       - {fn_name: cec2017_f9, dimensionality: 30, seed: 0}
@@ -185,11 +188,8 @@ schema:
   # composition, hybrid, rotated) are left out: encoding them for a mixed
   # set needs tolerate_missing, whose missingness pattern is close to a
   # suite identifier (l2co.task_features). `deterministic` is derived from
-  # the `noise` tag (l2co.features.DERIVED_FEATURES), so it adds no tag
-  # key. (The bool `noise` tag of the dataset protocol revision re-keys
-  # every task here but the bbob_noisy ones anyway.) False for exactly the
-  # noisy tasks: bbob_noisy, and CEC 2005 f4/f17/f24/f25, tagged noisy
-  # since the noise tag became a bool.
+  # the `noise` tag (l2co.features.DERIVED_FEATURES), so no task hash
+  # changes: false for exactly the bbob_noisy tasks.
   dimensionality: continuous
   unimodal: boolean
   deterministic: boolean

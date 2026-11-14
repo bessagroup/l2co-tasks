@@ -1,36 +1,41 @@
 # joint_selection_train -- the DATASET benchmark's training set:
 # 100 problems from five suites on which choosing the best of four
 # optimizers per problem clearly beats the best single optimizer
-# (DATASET paper, Sections 3.3-3.4).
+# (DATASET paper, Sections 3.3-4.1), on the re-run's databank
+# (databank_2026_11: starts uniform in the box, evaluation budget
+# min(10^3 d, 10^5)).
 #
-# 100 tasks (bbob: 19, bbob_embedded: 29, bbob_noisy: 32, cec2005: 17, cec2017: 3).
+# 100 tasks (bbob: 20, bbob_embedded: 44, bbob_noisy: 28, cec2005: 5, cec2017: 3).
 #
 # Selection (l2co_experiments experiments/joint_selection, run of
-# 2026-10-27; /oscar/data/mbessa/mvander7/joint_selection/
-# 2026-10-27_seed0_n100/main/train.json):
+# 2026-11-14; /oscar/data/mbessa/mvander7/joint_selection/
+#   2026-11-14_rerun_fixed_portfolio/main/train.json):
 #   * pool: seed 0 of every configuration of bbob, bbob_noisy, bbob_embedded
 #     (64 and 1024 ambient dimensions), cec2005 and cec2017, 678 problems,
 #     split by base landscape (ADR 0007) into two halves of 339;
-#   * this half: the portfolio and the problems were chosen together, at
-#     a fixed N = 100: the portfolio and selection maximise Delta at that
-#     size (Delta falls as N grows; the largest feasible N was 252).
+#   * this half: the portfolio was fixed before the selection by the per-family
+#     rule (the best candidate, by mean u on the training half, of each of
+#     the four optimizer families whose best member scores highest), and
+#     the problems were chosen for it at a fixed N = 100.
 #   * u = normalised ERTD AUC over log10 evaluations per dimension, 0.1 to
-#     1e5 (six decades; u_matrix.csv sha256 bb29ec8d...). Delta = mean
-#     over the problems of the portfolio's per-problem best (VBS) minus
-#     the best mean of any single one of the 60 candidates (SBS).
-#   * constraints: floor Delta >= 1/6 (choosing within the portfolio is
-#     ~10x cheaper than the SBS); balance, no member more than 0.06 above
-#     the members' mean (~2.3x); separation, on every problem the best
+#     2.5e4 (5.4 decades; u_matrix.csv sha256 995903c5...), with the
+#     overhead rule: u = 0 for a cell over 0.5 s per step (25 runs, after a
+#     300 s start-up allowance), i.e. the five full-covariance candidates at
+#     d = 1024. Delta = mean over the problems of the portfolio's
+#     per-problem best (VBS) minus the best mean of any single one of the
+#     60 candidates (SBS).
+#   * constraints: floor Delta >= 1/6; balance, no member more than 0.06
+#     above the members' mean; separation, on every problem the best
 #     member beats the members' mean by >= 0.02; no per-suite minimum.
 #
-# Achieved on this half: N = 100 of 339, Delta = 0.2738
-# (proven optimal); VBS = 0.5925, SBS = rprop_learning_rate=0.001 0.3187 (not a portfolio member).
+# Achieved on this half: N = 100 of 339, Delta = 0.1897
+# (proven optimal for this portfolio); VBS = 0.5316, SBS = rprop_learning_rate=0.01 0.3420.
 # Portfolio:
-#   crfmnes
-#   adafactor
-#   sgd_learning_rate=0.001
+#   crfmnes_std_init=0.2
+#   mr15ga_std_init=0.2
+#   rprop_learning_rate=0.01
 #   lbfgs
-# Problems won (crfmnes, adafactor, sgd, lbfgs): 24 / 30 / 17 / 29.
+# Problems won (crfmnes, mr15ga, rprop, lbfgs): 19 / 23 / 24 / 34.
 #
 # Functions are disjoint from joint_selection_test: every base landscape lies in
 # one half only. Seeds 1-3 of the same configurations are not in this
@@ -47,7 +52,7 @@ sampler_kwargs:
   n_samples: 0
 
 parts:
-  # bbob: 19 tasks
+  # bbob: 20 tasks
   - data_generator:
       _target_: l2co_tasks.create_bbob_task
       _partial_: True
@@ -55,45 +60,58 @@ parts:
     input_data:
       - {fn_name: gallagher_21_peaks, dimensionality: 10, seed: 0}
       - {fn_name: gallagher_101_peaks, dimensionality: 3, seed: 0}
+      - {fn_name: gallagher_101_peaks, dimensionality: 5, seed: 0}
+      - {fn_name: gallagher_101_peaks, dimensionality: 10, seed: 0}
       - {fn_name: griewank_rosenbrock_f8f2, dimensionality: 2, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, dimensionality: 3, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, dimensionality: 20, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, dimensionality: 40, seed: 0}
       - {fn_name: rastrigin, dimensionality: 2, seed: 0}
       - {fn_name: rastrigin, dimensionality: 3, seed: 0}
+      - {fn_name: rastrigin, dimensionality: 5, seed: 0}
       - {fn_name: rastrigin_seperable, dimensionality: 2, seed: 0}
-      - {fn_name: rastrigin_seperable, dimensionality: 3, seed: 0}
-      - {fn_name: rastrigin_seperable, dimensionality: 5, seed: 0}
-      - {fn_name: rastrigin_seperable, dimensionality: 10, seed: 0}
-      - {fn_name: rastrigin_seperable, dimensionality: 20, seed: 0}
-      - {fn_name: rastrigin_seperable, dimensionality: 40, seed: 0}
       - {fn_name: sharp_ridge, dimensionality: 2, seed: 0}
       - {fn_name: sharp_ridge, dimensionality: 3, seed: 0}
+      - {fn_name: sharp_ridge, dimensionality: 5, seed: 0}
       - {fn_name: skew_rastrigin_bueche, dimensionality: 2, seed: 0}
-      - {fn_name: skew_rastrigin_bueche, dimensionality: 5, seed: 0}
-      - {fn_name: skew_rastrigin_bueche, dimensionality: 10, seed: 0}
-      - {fn_name: skew_rastrigin_bueche, dimensionality: 20, seed: 0}
-      - {fn_name: sphere, dimensionality: 20, seed: 0}
       - {fn_name: sphere, dimensionality: 40, seed: 0}
-  # bbob_embedded: 29 tasks
+      - {fn_name: sum_of_different_powers, dimensionality: 10, seed: 0}
+      - {fn_name: sum_of_different_powers, dimensionality: 20, seed: 0}
+      - {fn_name: sum_of_different_powers, dimensionality: 40, seed: 0}
+  # bbob_embedded: 44 tasks
   - data_generator:
       _target_: l2co_tasks.create_embedded_bbob_task
       _partial_: True
     task_kwargs:
       bulk_scale: 0.0
     input_data:
-      - {fn_name: gallagher_101_peaks, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
-      - {fn_name: gallagher_101_peaks, intrinsic_dim: 10, ambient_dim: 1024, seed: 0}
+      - {fn_name: gallagher_21_peaks, intrinsic_dim: 40, ambient_dim: 64, seed: 0}
+      - {fn_name: gallagher_101_peaks, intrinsic_dim: 5, ambient_dim: 1024, seed: 0}
       - {fn_name: griewank_rosenbrock_f8f2, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
       - {fn_name: griewank_rosenbrock_f8f2, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, intrinsic_dim: 10, ambient_dim: 64, seed: 0}
+      - {fn_name: griewank_rosenbrock_f8f2, intrinsic_dim: 40, ambient_dim: 64, seed: 0}
       - {fn_name: griewank_rosenbrock_f8f2, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
       - {fn_name: griewank_rosenbrock_f8f2, intrinsic_dim: 5, ambient_dim: 1024, seed: 0}
       - {fn_name: griewank_rosenbrock_f8f2, intrinsic_dim: 10, ambient_dim: 1024, seed: 0}
       - {fn_name: katsuura, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
+      - {fn_name: katsuura, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
+      - {fn_name: katsuura, intrinsic_dim: 10, ambient_dim: 64, seed: 0}
+      - {fn_name: katsuura, intrinsic_dim: 40, ambient_dim: 64, seed: 0}
       - {fn_name: katsuura, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
+      - {fn_name: katsuura, intrinsic_dim: 5, ambient_dim: 1024, seed: 0}
+      - {fn_name: katsuura, intrinsic_dim: 10, ambient_dim: 1024, seed: 0}
+      - {fn_name: katsuura, intrinsic_dim: 40, ambient_dim: 1024, seed: 0}
+      - {fn_name: rastrigin, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
+      - {fn_name: rastrigin, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
+      - {fn_name: rastrigin, intrinsic_dim: 10, ambient_dim: 64, seed: 0}
       - {fn_name: rastrigin, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
       - {fn_name: rastrigin, intrinsic_dim: 5, ambient_dim: 1024, seed: 0}
-      - {fn_name: rastrigin, intrinsic_dim: 10, ambient_dim: 1024, seed: 0}
       - {fn_name: rastrigin_seperable, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
       - {fn_name: rastrigin_seperable, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
-      - {fn_name: schwefel_xsinx, intrinsic_dim: 5, ambient_dim: 1024, seed: 0}
+      - {fn_name: rastrigin_seperable, intrinsic_dim: 5, ambient_dim: 1024, seed: 0}
+      - {fn_name: schwefel_xsinx, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
+      - {fn_name: schwefel_xsinx, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
       - {fn_name: sharp_ridge, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
       - {fn_name: sharp_ridge, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
       - {fn_name: sharp_ridge, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
@@ -102,33 +120,26 @@ parts:
       - {fn_name: sharp_ridge, intrinsic_dim: 40, ambient_dim: 1024, seed: 0}
       - {fn_name: skew_rastrigin_bueche, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
       - {fn_name: skew_rastrigin_bueche, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
+      - {fn_name: skew_rastrigin_bueche, intrinsic_dim: 5, ambient_dim: 1024, seed: 0}
+      - {fn_name: sum_of_different_powers, intrinsic_dim: 2, ambient_dim: 64, seed: 0}
       - {fn_name: sum_of_different_powers, intrinsic_dim: 5, ambient_dim: 64, seed: 0}
       - {fn_name: sum_of_different_powers, intrinsic_dim: 10, ambient_dim: 64, seed: 0}
       - {fn_name: sum_of_different_powers, intrinsic_dim: 40, ambient_dim: 64, seed: 0}
+      - {fn_name: sum_of_different_powers, intrinsic_dim: 2, ambient_dim: 1024, seed: 0}
       - {fn_name: sum_of_different_powers, intrinsic_dim: 5, ambient_dim: 1024, seed: 0}
       - {fn_name: sum_of_different_powers, intrinsic_dim: 10, ambient_dim: 1024, seed: 0}
       - {fn_name: sum_of_different_powers, intrinsic_dim: 40, ambient_dim: 1024, seed: 0}
-  # bbob_noisy: 32 tasks
+  # bbob_noisy: 28 tasks
   - data_generator:
       _target_: l2co_tasks.create_bbob_noisy_task
       _partial_: True
     task_kwargs:
     input_data:
-      - {fn_name: bbob_noisy_f101, dimensionality: 3, seed: 0}
-      - {fn_name: bbob_noisy_f101, dimensionality: 5, seed: 0}
-      - {fn_name: bbob_noisy_f101, dimensionality: 10, seed: 0}
-      - {fn_name: bbob_noisy_f101, dimensionality: 20, seed: 0}
-      - {fn_name: bbob_noisy_f101, dimensionality: 40, seed: 0}
-      - {fn_name: bbob_noisy_f102, dimensionality: 5, seed: 0}
-      - {fn_name: bbob_noisy_f102, dimensionality: 10, seed: 0}
-      - {fn_name: bbob_noisy_f102, dimensionality: 20, seed: 0}
-      - {fn_name: bbob_noisy_f102, dimensionality: 40, seed: 0}
-      - {fn_name: bbob_noisy_f107, dimensionality: 2, seed: 0}
-      - {fn_name: bbob_noisy_f107, dimensionality: 3, seed: 0}
-      - {fn_name: bbob_noisy_f107, dimensionality: 5, seed: 0}
-      - {fn_name: bbob_noisy_f107, dimensionality: 10, seed: 0}
-      - {fn_name: bbob_noisy_f107, dimensionality: 20, seed: 0}
-      - {fn_name: bbob_noisy_f107, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f108, dimensionality: 2, seed: 0}
+      - {fn_name: bbob_noisy_f108, dimensionality: 3, seed: 0}
+      - {fn_name: bbob_noisy_f108, dimensionality: 5, seed: 0}
+      - {fn_name: bbob_noisy_f108, dimensionality: 10, seed: 0}
+      - {fn_name: bbob_noisy_f108, dimensionality: 20, seed: 0}
       - {fn_name: bbob_noisy_f108, dimensionality: 40, seed: 0}
       - {fn_name: bbob_noisy_f119, dimensionality: 2, seed: 0}
       - {fn_name: bbob_noisy_f119, dimensionality: 3, seed: 0}
@@ -136,17 +147,23 @@ parts:
       - {fn_name: bbob_noisy_f119, dimensionality: 10, seed: 0}
       - {fn_name: bbob_noisy_f119, dimensionality: 20, seed: 0}
       - {fn_name: bbob_noisy_f119, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f120, dimensionality: 2, seed: 0}
+      - {fn_name: bbob_noisy_f120, dimensionality: 3, seed: 0}
+      - {fn_name: bbob_noisy_f120, dimensionality: 5, seed: 0}
+      - {fn_name: bbob_noisy_f120, dimensionality: 10, seed: 0}
+      - {fn_name: bbob_noisy_f120, dimensionality: 20, seed: 0}
+      - {fn_name: bbob_noisy_f120, dimensionality: 40, seed: 0}
       - {fn_name: bbob_noisy_f125, dimensionality: 2, seed: 0}
-      - {fn_name: bbob_noisy_f125, dimensionality: 3, seed: 0}
-      - {fn_name: bbob_noisy_f125, dimensionality: 5, seed: 0}
-      - {fn_name: bbob_noisy_f126, dimensionality: 2, seed: 0}
-      - {fn_name: bbob_noisy_f126, dimensionality: 5, seed: 0}
-      - {fn_name: bbob_noisy_f126, dimensionality: 10, seed: 0}
-      - {fn_name: bbob_noisy_f126, dimensionality: 20, seed: 0}
-      - {fn_name: bbob_noisy_f126, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f127, dimensionality: 2, seed: 0}
+      - {fn_name: bbob_noisy_f127, dimensionality: 3, seed: 0}
+      - {fn_name: bbob_noisy_f128, dimensionality: 2, seed: 0}
+      - {fn_name: bbob_noisy_f128, dimensionality: 3, seed: 0}
       - {fn_name: bbob_noisy_f128, dimensionality: 5, seed: 0}
-      - {fn_name: bbob_noisy_f128, dimensionality: 10, seed: 0}
-  # cec2005: 17 tasks
+      - {fn_name: bbob_noisy_f128, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f129, dimensionality: 3, seed: 0}
+      - {fn_name: bbob_noisy_f129, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f130, dimensionality: 5, seed: 0}
+  # cec2005: 5 tasks
   - data_generator:
       _target_: l2co_tasks.create_cec2005_task
       _partial_: True
@@ -157,18 +174,6 @@ parts:
       - {fn_name: f1, dimensionality: 50, seed: 0}
       - {fn_name: f7, dimensionality: 30, seed: 0}
       - {fn_name: f7, dimensionality: 50, seed: 0}
-      - {fn_name: f18, dimensionality: 30, seed: 0}
-      - {fn_name: f19, dimensionality: 30, seed: 0}
-      - {fn_name: f21, dimensionality: 10, seed: 0}
-      - {fn_name: f21, dimensionality: 30, seed: 0}
-      - {fn_name: f21, dimensionality: 50, seed: 0}
-      - {fn_name: f22, dimensionality: 10, seed: 0}
-      - {fn_name: f22, dimensionality: 30, seed: 0}
-      - {fn_name: f22, dimensionality: 50, seed: 0}
-      - {fn_name: f23, dimensionality: 50, seed: 0}
-      - {fn_name: f24, dimensionality: 10, seed: 0}
-      - {fn_name: f24, dimensionality: 30, seed: 0}
-      - {fn_name: f24, dimensionality: 50, seed: 0}
   # cec2017: 3 tasks
   - data_generator:
       _target_: l2co_tasks.create_cec2017_task
@@ -185,11 +190,8 @@ schema:
   # composition, hybrid, rotated) are left out: encoding them for a mixed
   # set needs tolerate_missing, whose missingness pattern is close to a
   # suite identifier (l2co.task_features). `deterministic` is derived from
-  # the `noise` tag (l2co.features.DERIVED_FEATURES), so it adds no tag
-  # key. (The bool `noise` tag of the dataset protocol revision re-keys
-  # every task here but the bbob_noisy ones anyway.) False for exactly the
-  # noisy tasks: bbob_noisy, and CEC 2005 f4/f17/f24/f25, tagged noisy
-  # since the noise tag became a bool.
+  # the `noise` tag (l2co.features.DERIVED_FEATURES), so no task hash
+  # changes: false for exactly the bbob_noisy tasks.
   dimensionality: continuous
   unimodal: boolean
   deterministic: boolean
