@@ -40,6 +40,7 @@ _NEEDS_BBOB_NOISY = {
     "bbob_headroom_toy",
     "joint_selection_train",
     "joint_selection_test",
+    "joint_selection_test_half",
 }
 _HAS_BBOB_NOISY = hasattr(bbob_jax, "bbob_noisy_registry")
 
@@ -318,6 +319,8 @@ _SLOW = {
     # 100-task joint-selection composites, likewise in full.
     "joint_selection_train",
     "joint_selection_test",
+    # The whole 339-task test half they were chosen from, likewise.
+    "joint_selection_test_half",
 }
 
 
