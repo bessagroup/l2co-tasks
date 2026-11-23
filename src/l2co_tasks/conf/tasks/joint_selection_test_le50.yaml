@@ -1,0 +1,117 @@
+# joint_selection_test_le50 -- the problems of joint_selection_test with at
+# most 50 dimensions: every part except bbob_embedded (all 38 embedded
+# problems have 64 or 1024 ambient dimensions).
+#
+# 62 tasks (bbob: 16, bbob_noisy: 32, cec2005: 5, cec2017: 9), each entry
+# copied unchanged from joint_selection_test.yaml, so the task hashes are
+# the same and a run can append into the joint_selection_test store
+# (create_optimization_dataset tasks=joint_selection_test_le50
+# dataset=joint_selection_test).
+#
+# Why: meta-ELA features are not computed above 50 dimensions, so the ELA
+# and trajectory-based algorithm selectors run only on these 62 problems
+# (RL2CO_paper, decided 2026-11-23).
+sampler:
+  _target_: f3dasm.create_sampler
+  sampler: "random"  # identity: n_samples=0 appends no rows
+sampler_kwargs:
+  n_samples: 0
+
+parts:
+  - data_generator:
+      _target_: l2co_tasks.create_bbob_task
+      _partial_: True
+    task_kwargs:
+    input_data:
+      - {fn_name: attractive_sector, dimensionality: 10, seed: 0}
+      - {fn_name: ellipsoid_seperable, dimensionality: 5, seed: 0}
+      - {fn_name: ellipsoid_seperable, dimensionality: 10, seed: 0}
+      - {fn_name: ellipsoid_seperable, dimensionality: 20, seed: 0}
+      - {fn_name: ellipsoid_seperable, dimensionality: 40, seed: 0}
+      - {fn_name: rosenbrock_rotated, dimensionality: 40, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, dimensionality: 2, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, dimensionality: 3, seed: 0}
+      - {fn_name: schaffer_f7_condition_10, dimensionality: 5, seed: 0}
+      - {fn_name: schaffer_f7_condition_1000, dimensionality: 3, seed: 0}
+      - {fn_name: step_ellipsoid, dimensionality: 2, seed: 0}
+      - {fn_name: step_ellipsoid, dimensionality: 3, seed: 0}
+      - {fn_name: step_ellipsoid, dimensionality: 5, seed: 0}
+      - {fn_name: weierstrass, dimensionality: 2, seed: 0}
+      - {fn_name: weierstrass, dimensionality: 3, seed: 0}
+      - {fn_name: weierstrass, dimensionality: 5, seed: 0}
+  # bbob_embedded: 38 tasks
+  - data_generator:
+      _target_: l2co_tasks.create_bbob_noisy_task
+      _partial_: True
+    task_kwargs:
+    input_data:
+      - {fn_name: bbob_noisy_f104, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f105, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f110, dimensionality: 5, seed: 0}
+      - {fn_name: bbob_noisy_f110, dimensionality: 10, seed: 0}
+      - {fn_name: bbob_noisy_f110, dimensionality: 20, seed: 0}
+      - {fn_name: bbob_noisy_f110, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f111, dimensionality: 5, seed: 0}
+      - {fn_name: bbob_noisy_f111, dimensionality: 10, seed: 0}
+      - {fn_name: bbob_noisy_f111, dimensionality: 20, seed: 0}
+      - {fn_name: bbob_noisy_f111, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f113, dimensionality: 2, seed: 0}
+      - {fn_name: bbob_noisy_f113, dimensionality: 3, seed: 0}
+      - {fn_name: bbob_noisy_f114, dimensionality: 2, seed: 0}
+      - {fn_name: bbob_noisy_f115, dimensionality: 2, seed: 0}
+      - {fn_name: bbob_noisy_f115, dimensionality: 3, seed: 0}
+      - {fn_name: bbob_noisy_f115, dimensionality: 5, seed: 0}
+      - {fn_name: bbob_noisy_f116, dimensionality: 2, seed: 0}
+      - {fn_name: bbob_noisy_f116, dimensionality: 3, seed: 0}
+      - {fn_name: bbob_noisy_f116, dimensionality: 5, seed: 0}
+      - {fn_name: bbob_noisy_f116, dimensionality: 10, seed: 0}
+      - {fn_name: bbob_noisy_f116, dimensionality: 20, seed: 0}
+      - {fn_name: bbob_noisy_f116, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f117, dimensionality: 2, seed: 0}
+      - {fn_name: bbob_noisy_f117, dimensionality: 3, seed: 0}
+      - {fn_name: bbob_noisy_f117, dimensionality: 5, seed: 0}
+      - {fn_name: bbob_noisy_f117, dimensionality: 10, seed: 0}
+      - {fn_name: bbob_noisy_f117, dimensionality: 20, seed: 0}
+      - {fn_name: bbob_noisy_f117, dimensionality: 40, seed: 0}
+      - {fn_name: bbob_noisy_f122, dimensionality: 2, seed: 0}
+      - {fn_name: bbob_noisy_f122, dimensionality: 3, seed: 0}
+      - {fn_name: bbob_noisy_f124, dimensionality: 2, seed: 0}
+      - {fn_name: bbob_noisy_f124, dimensionality: 3, seed: 0}
+  # cec2005: 5 tasks
+  - data_generator:
+      _target_: l2co_tasks.create_cec2005_task
+      _partial_: True
+    task_kwargs:
+    input_data:
+      - {fn_name: f2, dimensionality: 30, seed: 0}
+      - {fn_name: f2, dimensionality: 50, seed: 0}
+      - {fn_name: f3, dimensionality: 10, seed: 0}
+      - {fn_name: f4, dimensionality: 30, seed: 0}
+      - {fn_name: f4, dimensionality: 50, seed: 0}
+  # cec2017: 9 tasks
+  - data_generator:
+      _target_: l2co_tasks.create_cec2017_task
+      _partial_: True
+    task_kwargs:
+    input_data:
+      - {fn_name: cec2017_f1, dimensionality: 10, seed: 0}
+      - {fn_name: cec2017_f1, dimensionality: 30, seed: 0}
+      - {fn_name: cec2017_f1, dimensionality: 50, seed: 0}
+      - {fn_name: cec2017_f4, dimensionality: 30, seed: 0}
+      - {fn_name: cec2017_f4, dimensionality: 50, seed: 0}
+      - {fn_name: cec2017_f6, dimensionality: 10, seed: 0}
+      - {fn_name: cec2017_f9, dimensionality: 10, seed: 0}
+      - {fn_name: cec2017_f9, dimensionality: 30, seed: 0}
+      - {fn_name: cec2017_f9, dimensionality: 50, seed: 0}
+
+schema:
+  # Only the features every task of the five suites tags. `separable`
+  # (BBOB suites only) and the CEC structure flags (multimodal,
+  # composition, hybrid, rotated) are left out: encoding them for a mixed
+  # set needs tolerate_missing, whose missingness pattern is close to a
+  # suite identifier (l2co.task_features). `deterministic` is derived from
+  # the `noise` tag (l2co.features.DERIVED_FEATURES), so no task hash
+  # changes: false for exactly the bbob_noisy tasks.
+  dimensionality: continuous
+  unimodal: boolean
+  deterministic: boolean

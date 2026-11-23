@@ -41,6 +41,7 @@ _NEEDS_BBOB_NOISY = {
     "joint_selection_train",
     "joint_selection_test",
     "joint_selection_test_half",
+    "joint_selection_test_le50",
 }
 _HAS_BBOB_NOISY = hasattr(bbob_jax, "bbob_noisy_registry")
 
@@ -321,6 +322,8 @@ _SLOW = {
     "joint_selection_test",
     # The whole 339-task test half they were chosen from, likewise.
     "joint_selection_test_half",
+    # joint_selection_test at d <= 50 (62 tasks), likewise.
+    "joint_selection_test_le50",
 }
 
 
