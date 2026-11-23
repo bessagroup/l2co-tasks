@@ -47,7 +47,11 @@ _HAS_BBOB_NOISY = hasattr(bbob_jax, "bbob_noisy_registry")
 
 # Configs whose data generator needs the CEC 2013 LSGO suite, which ships
 # with bbob-jax releases newer than 2.0.0; on older installs they skip.
-_NEEDS_LSGO = {"cec2013lsgo"}
+_NEEDS_LSGO = {
+    "cec2013lsgo",
+    "cec2013lsgo_unimodal",
+    "cec2013lsgo_multimodal",
+}
 _HAS_LSGO = hasattr(bbob_jax, "cec2013lsgo_registry")
 
 # OmegaConf overlays merged on top of each raw YAML before sampling.
