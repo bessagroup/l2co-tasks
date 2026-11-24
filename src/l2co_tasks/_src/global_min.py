@@ -59,7 +59,9 @@ downstream databank keys) between rebuilds.
 # Standard
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
+from pathlib import Path
 
 # Third-party
 import equinox as eqx
@@ -91,6 +93,61 @@ _RESTART_SAMPLER_FOLD = 1_000_003
 #: ``sampler(key, params, n_samples) -> params`` with a leading
 #: ``n_samples`` axis: the signature of the ``l2co.sampling`` samplers.
 RestartSampler = Callable[[jax.Array, PyTree, int], PyTree]
+
+logger = logging.getLogger(__name__)
+
+#: Share of ``vm.max_map_count`` above which :func:`estimate_global_min`
+#: drops the JAX caches before it runs. Well below 1 because one task's
+#: compile adds regions before the next check (metabbo-jax's RL-DAS
+#: training uses the same 0.7).
+MAPS_CLEAR_FRACTION = 0.7
+
+_MAPS_PATH = Path("/proc/self/maps")
+_MAX_MAP_COUNT_PATH = Path("/proc/sys/vm/max_map_count")
+
+
+def _count_mapped_regions() -> int | None:
+    """Line count of ``/proc/self/maps``; ``None`` if unreadable."""
+    try:
+        with _MAPS_PATH.open() as fh:
+            return sum(1 for _ in fh)
+    except OSError:
+        return None
+
+
+def _max_mapped_regions() -> int | None:
+    """The kernel's ``vm.max_map_count``; ``None`` if unreadable."""
+    try:
+        return int(_MAX_MAP_COUNT_PATH.read_text().strip())
+    except (OSError, ValueError):
+        return None
+
+
+def _clear_caches_on_map_pressure() -> None:
+    """Drop JAX's caches when the process nears its mapping cap.
+
+    Every compiled CPU program holds memory mappings and Linux caps them
+    per process (``vm.max_map_count``, 65530 on Oscar). Each task's
+    estimate compiles fresh programs that stay cached, so a process
+    creating ~100 tasks runs out (``LLVM compilation error: Cannot
+    allocate memory``). Clearing drops compiled code only, so estimates
+    do not change. Does nothing where ``/proc`` is unavailable.
+    """
+    n_maps = _count_mapped_regions()
+    max_maps = _max_mapped_regions()
+    if n_maps is None or max_maps is None:
+        return
+    if n_maps <= MAPS_CLEAR_FRACTION * max_maps:
+        return
+    jax.clear_caches()
+    logger.info(
+        "Cleared JAX caches: %d of %d memory maps in use (above %.0f%%); "
+        "%s after clearing.",
+        n_maps,
+        max_maps,
+        100 * MAPS_CLEAR_FRACTION,
+        _count_mapped_regions(),
+    )
 
 
 def _finite(loss: jax.Array) -> jax.Array:
@@ -262,6 +319,12 @@ def estimate_global_min(
     themselves, the first restart starts from ``task.model`` and the
     others from points spread relative to it (ADR 0004).
 
+    Before it runs, the search calls ``jax.clear_caches()`` when the
+    process uses more than :data:`MAPS_CLEAR_FRACTION` of the kernel's
+    memory-map cap (``vm.max_map_count``), so one process can create
+    many tasks without running out. This drops compiled code only and
+    never changes the estimate.
+
     Parameters
     ----------
     task : Task
@@ -311,6 +374,7 @@ def estimate_global_min(
         match the parameters.
     """
     box = _search_box(task)
+    _clear_caches_on_map_pressure()
     n_steps = max(int(n_steps), 1)
     n_restarts = max(int(n_restarts), 1)
     if lbfgs_steps is None:
